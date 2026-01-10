@@ -1,26 +1,34 @@
 import os
 import json
+import time
+
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Header, HTTPException, Query
+from pydantic import BaseModel
+from engine import get_client, analyze_review, normalize_platform, db_insert_review, db_fetch_reviews, summarize_reviews, db_init
 from dotenv import load_dotenv
 load_dotenv()
-
-from fastapi import FastAPI, Header, HTTPException
-from pydantic import BaseModel
-from engine import get_client, analyze_review, normalize_platform, append_log, summarize_reviews
-import time
 
 RATE_LIMIT_PER_MIN = 30  # adjust later
 _hits = {}  # dict: api_key -> list[timestamps]
 
-app = FastAPI(title="Restaurant Review Assistant API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db_init()  # runs once when app starts
+    yield
+    # (nothing needed on shutdown yet)
+
+app = FastAPI(title="Restaurant Review Assistant API", lifespan=lifespan)
 
 client = get_client()
 
 class ReviewRequest(BaseModel):
+    business_id: str
     review_text: str
     platform: str = "other"
     customer_name: str = ""
     order_number: str = ""
-    run_id: str = ""
+    run_id: str | None = None
 
 @app.get("/health")
 def health():
@@ -40,28 +48,23 @@ def analyze(req: ReviewRequest, x_api_key: str | None = Header(default=None)):
         run_id=req.run_id,
     )
 
-    log_path = os.path.join("logs", "review_log.json")
-    added, total = append_log(log_path, [record])
+    business_id = req.business_id.strip().lower()
+    db_insert_review(record, business_id=business_id)
 
     return {
-        "saved_to": log_path,
-        "added": added,
-        "total": total,
+        "business_id": business_id,
         "record": record
     }
 
 @app.get("/summary")
-def summary(x_api_key: str | None = Header(default=None)):
+def summary(
+    business_id: str = Query(...),
+    x_api_key: str | None = Header(default=None)
+):
     verify_api_key(x_api_key)
     rate_limit(x_api_key)
 
-    log_path = "logs/review_log.json"
-    if not os.path.exists(log_path):
-        return {"message": "No reviews logged yet."}
-
-    with open(log_path, "r") as f:
-        records = json.load(f)
-
+    records = db_fetch_reviews(business_id=business_id.strip().lower(), limit=500)
     return summarize_reviews(records)
 
 def verify_api_key(x_api_key: str | None):
@@ -82,3 +85,22 @@ def rate_limit(api_key: str):
 
     timestamps.append(now)
     _hits[api_key] = timestamps
+
+def get_business_from_key(x_api_key: str | None) -> str:
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Missing x-api-key")
+
+    admin = os.getenv("INTERNAL_API_KEY")
+    if x_api_key == admin:
+        return "__admin__"
+
+    raw = os.getenv("CUSTOMER_KEYS_JSON", "{}")
+    try:
+        mapping = json.loads(raw)
+    except Exception:
+        raise HTTPException(status_code=500, detail="CUSTOMER_KEYS_JSON is invalid JSON")
+
+    if x_api_key in mapping:
+        return str(mapping[x_api_key])
+
+    raise HTTPException(status_code=401, detail="Unauthorized")
