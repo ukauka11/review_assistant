@@ -1,0 +1,91 @@
+[
+  {
+    "run_id": "2026-01-07 23:47:17",
+    "platform": "other",
+    "customer_name": "",
+    "order_number": "",
+    "review": "Hello. thank you for the great food",
+    "tags": [],
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "other",
+    "reply": "Hi there! Thank you so much for your kind words. We're thrilled to hear you enjoyed our food and appreciate your support!",
+    "next_steps": [
+      "Share the positive feedback with the kitchen staff.",
+      "Post a thank you message on social media.",
+      "Monitor customer engagement for future interactions."
+    ]
+  },
+  {
+    "run_id": "2026-01-07 23:57:55",
+    "platform": "other",
+    "customer_name": "",
+    "order_number": "",
+    "review": "Hello. Thank you for the great experience. Everything was excellent!",
+    "tags": [],
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "other",
+    "reply": "Hi there! Thank you so much for your kind words! We're thrilled to hear you had a great experience with us. We look forward to serving you again soon!",
+    "next_steps": [
+      "Share positive feedback with the team",
+      "Post a thank you message on social media",
+      "Consider sending a discount offer for their next order"
+    ]
+  },
+  {
+    "run_id": "2026-01-08 01:14:11",
+    "platform": "other",
+    "customer_name": "",
+    "order_number": "",
+    "review": "Hello. Thank you for the great service and food.",
+    "tags": [
+      "great_service"
+    ],
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "service",
+    "reply": "We are thrilled to hear you enjoyed your experience with us! Thank you for your kind words and support. We look forward to serving you again soon!",
+    "next_steps": [
+      "Acknowledge and promote positive feedback internally.",
+      "Share the review with the team to boost morale.",
+      "Continue to monitor for more customer feedback."
+    ]
+  },
+  {
+    "run_id": "2026-01-08 01:19:08",
+    "platform": "other",
+    "customer_name": "",
+    "order_number": "",
+    "review": "Food was great but they forgot my sauce",
+    "tags": [
+      "missing_items"
+    ],
+    "sentiment": "neutral",
+    "urgency": "medium",
+    "category": "order_accuracy",
+    "reply": "Thank you for your feedback! We're glad to hear you enjoyed the food, but we apologize for the oversight with your sauce. Your comments are important to us, and we'll work to improve our order accuracy in the future.",
+    "next_steps": [
+      "Document customer feedback",
+      "Review order process for sauce inclusion",
+      "Ensure staff is reminded about sauce requests"
+    ]
+  },
+  {
+    "run_id": "",
+    "platform": "other",
+    "customer_name": "",
+    "order_number": "",
+    "review": "string",
+    "tags": [],
+    "sentiment": "neutral",
+    "urgency": "low",
+    "category": "other",
+    "reply": "Thank you for your feedback! We appreciate hearing from our customers and are always looking to improve. If you have specific suggestions, please feel free to share.",
+    "next_steps": [
+      "Review customer's feedback",
+      "Monitor for further comments",
+      "Consider updates or changes based on specifics if provided"
+    ]
+  }
+]

@@ -1,0 +1,59 @@
+[
+  {
+    "task": "Order supplies",
+    "priority": "high",
+    "ai_action": "Proceed with ordering supplies immediately.",
+    "ai_urgency": "high"
+  },
+  {
+    "task": "Clean fryers",
+    "priority": "medium",
+    "ai_action": "Schedule cleaning for fryers",
+    "ai_urgency": "medium"
+  },
+  {
+    "task": "Reply to reviews",
+    "priority": "low",
+    "ai_action": "No further action needed, task already completed.",
+    "ai_urgency": "low"
+  }
+][
+  {
+    "task": "Order supplies",
+    "priority": "high",
+    "ai_action": "Order supplies",
+    "ai_urgency": "high"
+  },
+  {
+    "task": "Clean fryers",
+    "priority": "medium",
+    "ai_action": "Schedule cleaning of fryers",
+    "ai_urgency": "medium"
+  },
+  {
+    "task": "Reply to reviews",
+    "priority": "low",
+    "ai_action": "No action required",
+    "ai_urgency": "low"
+  }
+]
+[
+  {
+    "task": "Order supplies",
+    "priority": "high",
+    "ai_action": "Proceed with ordering supplies immediately",
+    "ai_urgency": "high"
+  },
+  {
+    "task": "Clean fryers",
+    "priority": "medium",
+    "ai_action": "Schedule fryer cleaning for a later time",
+    "ai_urgency": "medium"
+  },
+  {
+    "task": "Reply to reviews",
+    "priority": "low",
+    "ai_action": "No action needed.",
+    "ai_urgency": "low"
+  }
+]

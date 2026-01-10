@@ -1,0 +1,249 @@
+[
+  {
+    "run_id": "2026-01-07 08:37:59",
+    "review": "Food was great. Chicken was the best I have ever had. They could probably work on their customer service. The young girls in the front were not that friendly. Busy talking amonst themselves and on their phone the whole time.",
+    "sentiment": "positive",
+    "urgency": "medium",
+    "category": "service",
+    "reply": "Thank you for your wonderful feedback about our food! We're delighted to hear that you enjoyed the chicken. We appreciate your input regarding our customer service and will address this with our team to ensure a better experience in the future.",
+    "next_steps": [
+      "Acknowledge positive feedback to the kitchen staff.",
+      "Discuss customer service issues in the next team meeting.",
+      "Provide additional training for front staff."
+    ]
+  },
+  {
+    "run_id": "2026-01-07 08:37:59",
+    "review": "'done'",
+    "sentiment": "neutral",
+    "urgency": "low",
+    "category": "other",
+    "reply": "Thank you for your message. If you have any specific feedback or questions, feel free to share with us!",
+    "next_steps": []
+  },
+  {
+    "run_id": "2026-01-07 08:46:10",
+    "review": "Hi. Love your restaurant. Please continue to make great food and have great customer service.",
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "other",
+    "reply": "Thank you so much for your wonderful feedback! We're thrilled to hear that you love our food and customer service. We'll continue to strive for excellence.",
+    "next_steps": [
+      "Share positive feedback with the team.",
+      "Continue monitoring customer satisfaction.",
+      "Encourage staff to maintain high standards."
+    ]
+  },
+  {
+    "run_id": "2026-01-07 08:46:49",
+    "review": "Terrible customer service and awful food. Will not be returning.",
+    "sentiment": "negative",
+    "urgency": "high",
+    "category": "service",
+    "reply": "We're very sorry to hear about your experience. Your feedback is important to us, and we will address these issues with our team to ensure improvements. We hope you'll consider giving us another chance in the future.",
+    "next_steps": [
+      "Notify the management team about the complaint",
+      "Review staff training procedures",
+      "Assess food quality issues reported",
+      "Follow up with the customer if contact information is available"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 08:56:45",
+    "customer_name": "done",
+    "order_number": "8087998847",
+    "review": "Great food, Great customer service, Will definitely be back.",
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "service",
+    "reply": "Thank you for your wonderful feedback! We're thrilled to hear you enjoyed the food and our customer service. We look forward to serving you again soon!",
+    "next_steps": [
+      "Share positive feedback with the team",
+      "Encourage team to maintain high service standards",
+      "Monitor for future reviews"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 09:05:12",
+    "platform": "other",
+    "customer_name": "Henry Ford",
+    "order_number": "54555",
+    "review": "Excellent food. Need to work on customer service with the young workers.",
+    "sentiment": "positive",
+    "urgency": "medium",
+    "category": "service",
+    "reply": "Thank you for your kind words about our food! We appreciate your feedback regarding our customer service and will work on improving our team's interactions.",
+    "next_steps": [
+      "Review staff training protocol",
+      "Gather feedback from team members",
+      "Implement customer service training sessions"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 09:09:17",
+    "platform": "other",
+    "customer_name": "Larry Nott",
+    "order_number": "33223",
+    "review": "Great food. Excellent service. Would like more of a variety but food was on point",
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "food_quality",
+    "reply": "Thank you for your kind words! We're thrilled you enjoyed the food and the service. We appreciate your feedback regarding variety and will definitely take it into consideration for our menu improvements.",
+    "next_steps": [
+      "Review menu for potential additions",
+      "Share positive feedback with the team",
+      "Monitor customer suggestions for variety"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 09:09:17",
+    "platform": "other",
+    "customer_name": "Larry Nott",
+    "order_number": "33223",
+    "review": "Great food. Excellent service. Would like more of a variety but food was on point.",
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "other",
+    "reply": "Thank you for your wonderful feedback! We're thrilled to hear that you enjoyed our food and service. We appreciate your suggestion for more variety and will consider it as we strive to improve.",
+    "next_steps": [
+      "Acknowledge positive feedback internally",
+      "Discuss menu variety options for future updates",
+      "Thank the staff for their excellent service"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 09:09:17",
+    "platform": "other",
+    "customer_name": "Larry Nott",
+    "order_number": "33223",
+    "review": "Great food. Excellent service. Would like more of a variety but food was on point.",
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "other",
+    "reply": "Thank you for your kind words! We're thrilled to hear that you enjoyed the food and service. We appreciate your feedback on the variety and will certainly take it into consideration as we plan our menu updates.",
+    "next_steps": [
+      "Review menu variety options",
+      "Discuss customer feedback in the next team meeting",
+      "Thank the staff for their excellent service"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 09:17:34",
+    "platform": "google",
+    "customer_name": "Larry Hein",
+    "order_number": "55444",
+    "review": "Excellent food. Excellent service. Will recommend.",
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "service",
+    "reply": "Thank you for your wonderful feedback! We are thrilled to hear that you enjoyed our food and service. Your recommendation means a lot to us.",
+    "next_steps": [
+      "Acknowledge the review internally",
+      "Share positive feedback with the team",
+      "Continue to monitor customer reviews"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 09:19:15",
+    "platform": "yelp",
+    "customer_name": "Larry",
+    "order_number": "44444",
+    "review": "Excellent food, Excellent service. Would recommend.",
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "service",
+    "reply": "Thank you for your wonderful review! We're thrilled to hear that you enjoyed both our food and service. Your recommendation means a lot to us, and we can't wait to serve you again!",
+    "next_steps": [
+      "Celebrate with the team",
+      "Maintain quality in food and service",
+      "Encourage more customer reviews"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 09:19:15",
+    "platform": "facebook",
+    "customer_name": "Larry",
+    "order_number": "44444",
+    "review": "Excellent food, Excellent service. Would recommend.",
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "service",
+    "reply": "Thank you so much for your kind words! We're thrilled to hear you enjoyed both our food and service. Your recommendation means a lot to us \u2013 hope to see you again soon!",
+    "next_steps": [
+      "Share the positive review with the team",
+      "Consider posting a thank you on our social media",
+      "Monitor for any follow-up comments"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 09:19:15",
+    "platform": "google",
+    "customer_name": "Larry",
+    "order_number": "44444",
+    "review": "Excellent food, Excellent service. Would recommend.",
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "service",
+    "reply": "Thank you for your kind words! We're thrilled to hear you enjoyed our food and service. Your recommendation means a lot to us!",
+    "next_steps": [
+      "Share positive review with the staff",
+      "Consider offering a small incentive for future visits",
+      "Monitor for follow-up reviews"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 09:19:15",
+    "platform": "other",
+    "customer_name": "Larry",
+    "order_number": "44444",
+    "review": "Excellent food, Excellent service. Would recommend.",
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "service",
+    "reply": "Thank you so much for your kind words! We're thrilled to hear you enjoyed the food and service. Your recommendation means a lot to us!",
+    "next_steps": [
+      "Share positive feedback with the team",
+      "Encourage staff to maintain high standards",
+      "Consider a follow-up promotional offer"
+    ]
+  },
+  {
+    "run_id": "2026-01-07 19:44:38",
+    "platform": "google",
+    "customer_name": "Henry",
+    "order_number": "33422",
+    "review": "Waited 30 minutes, chicken was good but they forgot my sauce.",
+    "tags": [
+      "missing_items",
+      "wait_time"
+    ],
+    "sentiment": "neutral",
+    "urgency": "medium",
+    "category": "order_accuracy",
+    "reply": "Thank you for your feedback! We're glad to hear you enjoyed the chicken, but we apologize for the missing sauce. We appreciate your patience and will work to improve our order accuracy.",
+    "next_steps": [
+      "Document the feedback.",
+      "Review the order process for sauce accuracy.",
+      "Implement training for staff on sauce inclusion."
+    ]
+  },
+  {
+    "run_id": "2026-01-07 23:38:56",
+    "platform": "yelp",
+    "customer_name": "Larry",
+    "order_number": "343443",
+    "review": "Great food, Great service, Will be back again.",
+    "tags": [
+      "great_service"
+    ],
+    "sentiment": "positive",
+    "urgency": "low",
+    "category": "service",
+    "reply": "Thank you so much for your wonderful review! We're thrilled to hear that you enjoyed both our food and service. We can't wait to welcome you back again soon!",
+    "next_steps": [
+      "Acknowledge the positive review internally",
+      "Share feedback with the team",
+      "Consider asking for more reviews from satisfied customers"
+    ]
+  }
+]

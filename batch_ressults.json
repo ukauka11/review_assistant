@@ -1,0 +1,20 @@
+[
+  {
+    "task": "Order supplies",
+    "priority": "high",
+    "ai_action": "Order supplies immediately",
+    "ai_urgency": "high"
+  },
+  {
+    "task": "Clean fryers",
+    "priority": "medium",
+    "ai_action": "Schedule cleaning of fryers",
+    "ai_urgency": "medium"
+  },
+  {
+    "task": "Reply to reviews",
+    "priority": "low",
+    "ai_action": "No further action needed",
+    "ai_urgency": "low"
+  }
+]
