@@ -3,6 +3,7 @@ import json
 from openai import OpenAI
 from collections import Counter
 from datetime import datetime
+from psycopg import connect
 
 ALLOWED_URGENCY = {"high", "medium", "low"}
 ALLOWED_SENTIMENT = {"positive", "neutral", "negative"}
@@ -193,3 +194,90 @@ def summarize_reviews(records: list[dict]) -> dict:
         "top_issues": top_issues[:5],
         "recommended_focus": top_issues[0]["issue"] if top_issues else "none"
     }
+
+def db_conn():
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL not set")
+    return connect(url)
+
+def db_init():
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS reviews (
+                    id SERIAL PRIMARY KEY,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    run_id TEXT,
+                    business_id TEXT,
+                    platform TEXT,
+                    customer_name TEXT,
+                    order_number TEXT,
+                    review TEXT,
+                    tags JSONB,
+                    sentiment TEXT,
+                    urgency TEXT,
+                    category TEXT,
+                    reply TEXT,
+                    next_steps JSONB
+                )
+            """)
+        conn.commit()
+
+def db_insert_review(record: dict, business_id: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO reviews (
+                    run_id, business_id, platform, customer_name, order_number,
+                    review, tags, sentiment, urgency, category, reply, next_steps
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                record.get("run_id"),
+                business_id,
+                record.get("platform"),
+                record.get("customer_name"),
+                record.get("order_number"),
+                record.get("review"),
+                json.dumps(record.get("tags", [])),
+                record.get("sentiment"),
+                record.get("urgency"),
+                record.get("category"),
+                record.get("reply"),
+                json.dumps(record.get("next_steps", [])),
+            ))
+        conn.commit()
+
+def db_fetch_reviews(business_id: str, limit: int = 500) -> list[dict]:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT run_id, business_id, platform, customer_name, order_number,
+                       review, tags, sentiment, urgency, category, reply, next_steps,
+                       created_at
+                FROM reviews
+                WHERE business_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (business_id, limit))
+            rows = cur.fetchall()
+
+    records = []
+    for r in rows:
+        records.append({
+            "run_id": r[0],
+            "business_id": r[1],
+            "platform": r[2],
+            "customer_name": r[3],
+            "order_number": r[4],
+            "review": r[5],
+            "tags": r[6] or [],
+            "sentiment": r[7],
+            "urgency": r[8],
+            "category": r[9],
+            "reply": r[10],
+            "next_steps": r[11] or [],
+            "created_at": str(r[12]),
+        })
+    return records
