@@ -23,7 +23,6 @@ app = FastAPI(title="Restaurant Review Assistant API", lifespan=lifespan)
 client = get_client()
 
 class ReviewRequest(BaseModel):
-    business_id: str
     review_text: str
     platform: str = "other"
     customer_name: str = ""
@@ -39,6 +38,38 @@ def analyze(req: ReviewRequest, x_api_key: str | None = Header(default=None)):
     verify_api_key(x_api_key)
     rate_limit(x_api_key)
 
+    business_from_key = get_business_from_key(x_api_key)
+
+    # Admin is allowed to act on behalf of any business via a query param (optional)
+    if business_from_key == "__admin__":
+        raise HTTPException(status_code=400, detail="Admin should use /analyze_admin")
+    
+    record = analyze_review(
+        client=client,
+        review_text=req.review_text,
+        platform=normalize_platform(req.platform),
+        customer_name=req.customer_name,
+        order_number=req.order_number,
+        run_id=req.run_id,
+    )
+
+    business_id = business_from_key.strip().lower()
+    db_insert_review(record, business_id=business_id)
+
+    return {"business_id": business_id, "record": record}
+
+class AdminAnalyzeRequest(ReviewRequest):
+    business_id: str
+
+@app.post("/analyze_admin")
+def analyze_admin(req: AdminAnalyzeRequest, x_api_key: str | None = Header(default=None)):
+    # admin only
+    expected = os.getenv("INTERNAL_API_KEY")
+    if not expected or x_api_key != expected:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    rate_limit(x_api_key)
+
     record = analyze_review(
         client=client,
         review_text=req.review_text,
@@ -51,17 +82,29 @@ def analyze(req: ReviewRequest, x_api_key: str | None = Header(default=None)):
     business_id = req.business_id.strip().lower()
     db_insert_review(record, business_id=business_id)
 
-    return {
-        "business_id": business_id,
-        "record": record
-    }
+    return {"business_id": business_id, "record": record}
 
 @app.get("/summary")
-def summary(
+def summary(x_api_key: str | None = Header(default=None)):
+    verify_api_key(x_api_key)
+    rate_limit(x_api_key)
+
+    business_from_key = get_business_from_key(x_api_key)
+    if business_from_key == "__admin__":
+        raise HTTPException(status_code=400, detail="Admin should use /summary_admin?business_id=...")
+
+    records = db_fetch_reviews(business_id=business_from_key.strip().lower(), limit=500)
+    return summarize_reviews(records)
+
+@app.get("/summary_admin")
+def summary_admin(
     business_id: str = Query(...),
     x_api_key: str | None = Header(default=None)
 ):
-    verify_api_key(x_api_key)
+    expected = os.getenv("INTERNAL_API_KEY")
+    if not expected or x_api_key != expected:
+        raise HTTPException(status_code=403, detail="Admin only")
+
     rate_limit(x_api_key)
 
     records = db_fetch_reviews(business_id=business_id.strip().lower(), limit=500)
