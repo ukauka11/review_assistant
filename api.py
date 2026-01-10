@@ -110,10 +110,30 @@ def summary_admin(
     records = db_fetch_reviews(business_id=business_id.strip().lower(), limit=500)
     return summarize_reviews(records)
 
-def verify_api_key(x_api_key: str | None):
-    expected = os.getenv("INTERNAL_API_KEY")
-    if not expected or x_api_key != expected:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def verify_api_key(x_api_key: str | None) -> None:
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Missing x-api-key")
+
+    key = x_api_key.strip()
+
+    admin = os.getenv("INTERNAL_API_KEY")
+    if admin and key == admin.strip():
+        return  # admin ok
+
+    raw = (os.getenv("CUSTOMER_KEYS_JSON") or "{}").strip()
+
+    try:
+        mapping = json.loads(raw)
+        # If Render stored it as a quoted JSON string, decode twice
+        if isinstance(mapping, str):
+            mapping = json.loads(mapping)
+    except Exception:
+        raise HTTPException(status_code=500, detail="CUSTOMER_KEYS_JSON is invalid JSON")
+
+    if isinstance(mapping, dict) and key in mapping:
+        return  # customer ok
+
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 def rate_limit(api_key: str):
     now = time.time()
