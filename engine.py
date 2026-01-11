@@ -281,3 +281,15 @@ def db_fetch_reviews(business_id: str, limit: int = 500) -> list[dict]:
             "created_at": str(r[12]),
         })
     return records
+
+def db_list_businesses(limit: int = 1000) -> list[str]:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT business_id
+                FROM reviews
+                ORDER BY business_id
+                LIMIT %s
+            """, (limit,))
+            rows = cur.fetchall()
+    return [r[0] for r in rows if r and r[0]]

@@ -1,11 +1,11 @@
 import os
 import json
 import time
-
+import requests
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel
-from engine import get_client, analyze_review, normalize_platform, db_insert_review, db_fetch_reviews, summarize_reviews, db_init
+from engine import db_list_businesses, get_client, analyze_review, normalize_platform, db_insert_review, db_fetch_reviews, summarize_reviews, db_init
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -38,12 +38,10 @@ def analyze(req: ReviewRequest, x_api_key: str | None = Header(default=None)):
     verify_api_key(x_api_key)
     rate_limit(x_api_key)
 
-    business_from_key = get_business_from_key(x_api_key)
-
-    # Admin is allowed to act on behalf of any business via a query param (optional)
+    business_from_key = get_business_from_key(x_api_key)  # returns business_id or "__admin__"
     if business_from_key == "__admin__":
-        raise HTTPException(status_code=400, detail="Admin should use /analyze_admin")
-    
+        raise HTTPException(status_code=400, detail="Use /analyze_admin for admin requests")
+
     record = analyze_review(
         client=client,
         review_text=req.review_text,
@@ -61,13 +59,14 @@ def analyze(req: ReviewRequest, x_api_key: str | None = Header(default=None)):
 class AdminAnalyzeRequest(ReviewRequest):
     business_id: str
 
-@app.post("/analyze_admin")
-def analyze_admin(req: AdminAnalyzeRequest, x_api_key: str | None = Header(default=None)):
-    # admin only
-    expected = os.getenv("INTERNAL_API_KEY")
-    if not expected or x_api_key != expected:
+def require_admin(x_api_key: str | None):
+    admin = os.getenv("INTERNAL_API_KEY")
+    if not admin or not x_api_key or x_api_key.strip() != admin.strip():
         raise HTTPException(status_code=403, detail="Admin only")
 
+@app.post("/analyze_admin")
+def analyze_admin(req: AdminAnalyzeRequest, x_api_key: str | None = Header(default=None)):
+    require_admin(x_api_key)
     rate_limit(x_api_key)
 
     record = analyze_review(
@@ -91,24 +90,48 @@ def summary(x_api_key: str | None = Header(default=None)):
 
     business_from_key = get_business_from_key(x_api_key)
     if business_from_key == "__admin__":
-        raise HTTPException(status_code=400, detail="Admin should use /summary_admin?business_id=...")
+        raise HTTPException(status_code=400, detail="Use /summary_admin?business_id=... for admin")
 
     records = db_fetch_reviews(business_id=business_from_key.strip().lower(), limit=500)
     return summarize_reviews(records)
 
 @app.get("/summary_admin")
-def summary_admin(
-    business_id: str = Query(...),
-    x_api_key: str | None = Header(default=None)
-):
-    expected = os.getenv("INTERNAL_API_KEY")
-    if not expected or x_api_key != expected:
-        raise HTTPException(status_code=403, detail="Admin only")
-
+def summary_admin(business_id: str = Query(...), x_api_key: str | None = Header(default=None)):
+    require_admin(x_api_key)
     rate_limit(x_api_key)
 
     records = db_fetch_reviews(business_id=business_id.strip().lower(), limit=500)
     return summarize_reviews(records)
+
+@app.post("/jobs/daily-summary")
+def daily_summary_job(x_api_key: str | None = Header(default=None)):
+    require_admin(x_api_key)
+
+    webhook = os.getenv("DISCORD_WEBHOOK_URL")
+    if not webhook:
+        raise HTTPException(status_code=500, detail="DISCORD_WEBHOOK_URL not set")
+
+    businesses = db_list_businesses(limit=1000)
+    sent = 0
+
+    for biz in businesses:
+        records = db_fetch_reviews(business_id=biz, limit=200)
+        summary = summarize_reviews(records)
+
+        text = (
+            f"**Daily Summary — {biz}**\n"
+            f"Total: {summary.get('total_reviews', 0)} | "
+            f"Positive: {summary.get('positive', 0)} | "
+            f"Neutral: {summary.get('neutral', 0)} | "
+            f"Negative: {summary.get('negative', 0)}\n"
+            f"Top issues: {summary.get('top_issues', [])}\n"
+        )
+
+        r = requests.post(webhook, json={"content": text}, timeout=15)
+        r.raise_for_status()
+        sent += 1
+
+    return {"businesses": len(businesses), "sent": sent}
 
 def verify_api_key(x_api_key: str | None) -> None:
     if not x_api_key:
