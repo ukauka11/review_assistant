@@ -2,6 +2,7 @@ import os
 import json
 import time
 import requests
+import secrets
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel
@@ -63,6 +64,22 @@ def require_admin(x_api_key: str | None):
     admin = os.getenv("INTERNAL_API_KEY")
     if not admin or not x_api_key or x_api_key.strip() != admin.strip():
         raise HTTPException(status_code=403, detail="Admin only")
+
+class CreateCustomerRequest(BaseModel):
+    business_id: str
+
+@app.post("/admin/create_customer")
+def create_customer(req: CreateCustomerRequest, x_api_key: str | None = Header(default=None)):
+    require_admin(x_api_key)
+
+    new_key = "cust_" + secrets.token_urlsafe(24)
+    business_id = req.business_id.strip().lower()
+
+    return {
+        "business_id": business_id,
+        "customer_api_key": new_key,
+        "next_step": "Add this key to CUSTOMER_KEYS_JSON in Render (or store it in DB in the next step)."
+    }
 
 @app.post("/analyze_admin")
 def analyze_admin(req: AdminAnalyzeRequest, x_api_key: str | None = Header(default=None)):
