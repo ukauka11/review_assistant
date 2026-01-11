@@ -79,22 +79,6 @@ def require_admin(x_api_key: str | None):
     if not admin or not x_api_key or x_api_key.strip() != admin.strip():
         raise HTTPException(status_code=403, detail="Admin only")
 
-class CreateCustomerRequest(BaseModel):
-    business_id: str
-
-@app.post("/admin/create_customer")
-def create_customer(req: CreateCustomerRequest, x_api_key: str | None = Header(default=None)):
-    require_admin(x_api_key)
-
-    new_key = "cust_" + secrets.token_urlsafe(24)
-    business_id = req.business_id.strip().lower()
-
-    return {
-        "business_id": business_id,
-        "customer_api_key": new_key,
-        "next_step": "Add this key to CUSTOMER_KEYS_JSON in Render (or store it in DB in the next step)."
-    }
-
 @app.post("/analyze_admin")
 def analyze_admin(req: AdminAnalyzeRequest, x_api_key: str | None = Header(default=None)):
     require_admin(x_api_key)
@@ -183,6 +167,46 @@ def set_webhook(req: SetWebhookRequest, x_api_key: str | None = Header(default=N
     db_set_webhook(biz, req.discord_webhook_url)
 
     return {"status": "ok", "business_id": biz}
+
+class CreateCustomerRequest(BaseModel):
+    business_id: str
+
+@app.post("/admin/create_customer")
+def create_customer(req: CreateCustomerRequest, x_api_key: str | None = Header(default=None)):
+    require_admin(x_api_key)
+
+    new_key = "cust_" + secrets.token_urlsafe(24)
+    business_id = req.business_id.strip().lower()
+
+    return {
+        "business_id": business_id,
+        "customer_api_key": new_key,
+        "next_step": "Add this key to CUSTOMER_KEYS_JSON in Render (or store it in DB in the next step)."
+    }
+
+class OnboardCustomerRequest(BaseModel):
+    business_id: str
+    discord_webhook_url: str
+
+@app.post("/admin/onboard_customer")
+def onboard_customer(req: OnboardCustomerRequest, x_api_key: str | None = Header(default=None)):
+    require_admin(x_api_key)
+
+    business_id = req.business_id.strip().lower()
+    webhook = req.discord_webhook_url.strip()
+
+    new_key = "cust_" + secrets.token_urlsafe(24)
+
+    db_add_customer_key(new_key, business_id)
+    db_set_webhook(business_id, webhook)
+
+    return {
+        "business_id": business_id,
+        "customer_api_key": new_key,
+        "summary_url": "/summary",
+        "analyze_url": "/analyze",
+        "notes": "Customer should use x-api-key header with customer_api_key. Summary/analyze automatically use their business."
+    }
 
 class AdminAddCustomerKeyRequest(BaseModel):
     business_id: str
