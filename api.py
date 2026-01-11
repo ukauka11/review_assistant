@@ -115,23 +115,25 @@ def daily_summary_job(x_api_key: str | None = Header(default=None)):
     sent = 0
 
     for biz in businesses:
-        records = db_fetch_reviews(business_id=biz, limit=200)
-        summary = summarize_reviews(records)
+        try:
+            records = db_fetch_reviews(business_id=biz, limit=200)
+            summary = summarize_reviews(records)
 
-        text = (
-            f"**Daily Summary — {biz}**\n"
-            f"Total: {summary.get('total_reviews', 0)} | "
-            f"Positive: {summary.get('positive', 0)} | "
-            f"Neutral: {summary.get('neutral', 0)} | "
-            f"Negative: {summary.get('negative', 0)}\n"
-            f"Top issues: {summary.get('top_issues', [])}\n"
-        )
+            text = (
+                f"**Daily Summary — {biz}**\n"
+                f"Total: {summary.get('total_reviews', 0)} | "
+                f"Positive: {summary.get('positive', 0)} | "
+                f"Neutral: {summary.get('neutral', 0)} | "
+                f"Negative: {summary.get('negative', 0)}\n"
+                f"Top issues: {summary.get('top_issues', [])}\n"
+            )
 
-        r = requests.post(webhook, json={"content": text}, timeout=15)
-        r.raise_for_status()
-        sent += 1
+            r = requests.post(webhook, json={"content": text}, timeout=15)
+            r.raise_for_status()
+            sent += 1
 
-    return {"businesses": len(businesses), "sent": sent}
+        except Exception as e:
+            print(f"Failed to send summary for {biz}: {e}")
 
 def verify_api_key(x_api_key: str | None) -> None:
     if not x_api_key:
