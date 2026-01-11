@@ -222,6 +222,13 @@ def db_init():
                     next_steps JSONB
                 )
             """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS business_settings (
+                    business_id TEXT PRIMARY KEY,
+                    discord_webhook_url TEXT
+                )
+            """)
         conn.commit()
 
 def db_insert_review(record: dict, business_id: str) -> None:
@@ -293,3 +300,24 @@ def db_list_businesses(limit: int = 1000) -> list[str]:
             """, (limit,))
             rows = cur.fetchall()
     return [r[0] for r in rows if r and r[0]]
+
+def db_set_webhook(business_id: str, webhook_url: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO business_settings (business_id, discord_webhook_url)
+                VALUES (%s, %s)
+                ON CONFLICT (business_id)
+                DO UPDATE SET discord_webhook_url = EXCLUDED.discord_webhook_url
+            """, (business_id, webhook_url))
+        conn.commit()
+
+def db_get_webhook(business_id: str) -> str | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT discord_webhook_url FROM business_settings WHERE business_id = %s",
+                (business_id,)
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
