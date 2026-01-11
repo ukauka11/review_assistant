@@ -6,7 +6,18 @@ import secrets
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel
-from engine import db_list_businesses, get_client, analyze_review, normalize_platform, db_insert_review, db_fetch_reviews, summarize_reviews, db_init
+from engine import (
+    db_list_businesses,
+    get_client,
+    analyze_review,
+    normalize_platform,
+    db_insert_review,
+    db_fetch_reviews,
+    summarize_reviews,
+    db_init,
+    db_get_webhook,
+    db_set_webhook,
+)
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -124,14 +135,17 @@ def summary_admin(business_id: str = Query(...), x_api_key: str | None = Header(
 def daily_summary_job(x_api_key: str | None = Header(default=None)):
     require_admin(x_api_key)
 
-    webhook = os.getenv("DISCORD_WEBHOOK_URL")
-    if not webhook:
-        raise HTTPException(status_code=500, detail="DISCORD_WEBHOOK_URL not set")
-
     businesses = db_list_businesses(limit=1000)
     sent = 0
+    skipped = 0
 
     for biz in businesses:
+        webhook = db_get_webhook(biz)
+        if not webhook:
+            print(f"No webhook set for {biz}, skipping")
+            skipped += 1
+            continue
+
         try:
             records = db_fetch_reviews(business_id=biz, limit=200)
             summary = summarize_reviews(records)
@@ -151,6 +165,21 @@ def daily_summary_job(x_api_key: str | None = Header(default=None)):
 
         except Exception as e:
             print(f"Failed to send summary for {biz}: {e}")
+
+    return {"businesses": len(businesses), "sent": sent, "skipped": skipped}
+
+class SetWebhookRequest(BaseModel):
+    business_id: str
+    discord_webhook_url: str
+
+@app.post("/admin/set_webhook")
+def set_webhook(req: SetWebhookRequest, x_api_key: str | None = Header(default=None)):
+    require_admin(x_api_key)
+
+    biz = req.business_id.strip().lower()
+    db_set_webhook(biz, req.discord_webhook_url)
+
+    return {"status": "ok", "business_id": biz}
 
 def verify_api_key(x_api_key: str | None) -> None:
     if not x_api_key:
