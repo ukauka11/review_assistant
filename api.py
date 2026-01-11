@@ -17,6 +17,9 @@ from engine import (
     db_init,
     db_get_webhook,
     db_set_webhook,
+    db_add_customer_key, 
+    db_deactivate_customer_key, 
+    db_get_business_for_key
 )
 from dotenv import load_dotenv
 load_dotenv()
@@ -181,6 +184,28 @@ def set_webhook(req: SetWebhookRequest, x_api_key: str | None = Header(default=N
 
     return {"status": "ok", "business_id": biz}
 
+class AdminAddCustomerKeyRequest(BaseModel):
+    business_id: str
+    api_key: str
+
+@app.post("/admin/customer_keys/add")
+def admin_add_customer_key(req: AdminAddCustomerKeyRequest, x_api_key: str | None = Header(default=None)):
+    require_admin(x_api_key)
+    biz = req.business_id.strip().lower()
+    key = req.api_key.strip()
+    db_add_customer_key(key, biz)
+    return {"status": "ok", "business_id": biz, "api_key": key}
+
+class AdminDeactivateCustomerKeyRequest(BaseModel):
+    api_key: str
+
+@app.post("/admin/customer_keys/deactivate")
+def admin_deactivate_customer_key(req: AdminDeactivateCustomerKeyRequest, x_api_key: str | None = Header(default=None)):
+    require_admin(x_api_key)
+    key = req.api_key.strip()
+    db_deactivate_customer_key(key)
+    return {"status": "ok", "api_key": key}
+
 def verify_api_key(x_api_key: str | None) -> None:
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing x-api-key")
@@ -189,20 +214,11 @@ def verify_api_key(x_api_key: str | None) -> None:
 
     admin = os.getenv("INTERNAL_API_KEY")
     if admin and key == admin.strip():
-        return  # admin ok
+        return
 
-    raw = (os.getenv("CUSTOMER_KEYS_JSON") or "{}").strip()
-
-    try:
-        mapping = json.loads(raw)
-        # If Render stored it as a quoted JSON string, decode twice
-        if isinstance(mapping, str):
-            mapping = json.loads(mapping)
-    except Exception:
-        raise HTTPException(status_code=500, detail="CUSTOMER_KEYS_JSON is invalid JSON")
-
-    if isinstance(mapping, dict) and key in mapping:
-        return  # customer ok
+    biz = db_get_business_for_key(key)
+    if biz:
+        return
 
     raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -224,17 +240,14 @@ def get_business_from_key(x_api_key: str | None) -> str:
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing x-api-key")
 
+    key = x_api_key.strip()
+
     admin = os.getenv("INTERNAL_API_KEY")
-    if x_api_key == admin:
+    if admin and key == admin.strip():
         return "__admin__"
 
-    raw = os.getenv("CUSTOMER_KEYS_JSON", "{}")
-    try:
-        mapping = json.loads(raw)
-    except Exception:
-        raise HTTPException(status_code=500, detail="CUSTOMER_KEYS_JSON is invalid JSON")
-
-    if x_api_key in mapping:
-        return str(mapping[x_api_key])
+    biz = db_get_business_for_key(key)
+    if biz:
+        return biz
 
     raise HTTPException(status_code=401, detail="Unauthorized")

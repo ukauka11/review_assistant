@@ -229,6 +229,16 @@ def db_init():
                     discord_webhook_url TEXT
                 )
             """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS customer_keys (
+                    api_key TEXT PRIMARY KEY,
+                    business_id TEXT NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE
+                )
+            """)
+
         conn.commit()
 
 def db_insert_review(record: dict, business_id: str) -> None:
@@ -321,3 +331,36 @@ def db_get_webhook(business_id: str) -> str | None:
             )
             row = cur.fetchone()
             return row[0] if row else None
+
+def db_add_customer_key(api_key: str, business_id: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO customer_keys (api_key, business_id, is_active)
+                VALUES (%s, %s, TRUE)
+                ON CONFLICT (api_key)
+                DO UPDATE SET business_id = EXCLUDED.business_id, is_active = TRUE
+            """, (api_key, business_id))
+        conn.commit()
+
+def db_deactivate_customer_key(api_key: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE customer_keys
+                SET is_active = FALSE
+                WHERE api_key = %s
+            """, (api_key,))
+        conn.commit()
+
+def db_get_business_for_key(api_key: str) -> str | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT business_id
+                FROM customer_keys
+                WHERE api_key = %s AND is_active = TRUE
+                LIMIT 1
+            """, (api_key,))
+            row = cur.fetchone()
+    return row[0] if row else None
