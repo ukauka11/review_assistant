@@ -4,4 +4,4 @@ python-dotenv
 openai
 requests
 psycopg[binary]
-stripe
+stripe>=10.0.0

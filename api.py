@@ -3,8 +3,9 @@ import json
 import time
 import requests
 import secrets
+import stripe
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 from engine import (
     db_list_businesses,
@@ -27,6 +28,8 @@ load_dotenv()
 RATE_LIMIT_PER_MIN = 30  # adjust later
 _hits = {}  # dict: api_key -> list[timestamps]
 
+stripe.api_key = os.getenv("STRIPE_API_KEY")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db_init()  # runs once when app starts
@@ -43,6 +46,45 @@ class ReviewRequest(BaseModel):
     customer_name: str = ""
     order_number: str = ""
     run_id: str | None = None
+
+stripe.api_key = os.getenv("STRIPE_API_KEY")
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+    if not webhook_secret:
+        raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET not set")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload=payload,
+            sig_header=sig_header,
+            secret=webhook_secret
+        )
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Stripe signature")
+
+    # Trigger on subscription/payment success
+    if event["type"] in ["checkout.session.completed", "invoice.payment_succeeded"]:
+        data = event["data"]["object"]
+
+        # Pull customer email
+        email = data.get("customer_details", {}).get("email") or data.get("customer_email")
+
+        # For now: create a business_id from email prefix
+        # (Next: you’ll collect a real business name in checkout)
+        if email:
+            biz = email.split("@")[0].lower().replace(".", "_")
+            new_key = "cust_" + secrets.token_urlsafe(24)
+            db_add_customer_key(new_key, biz)
+
+            # No webhook yet; customer sets later
+            print(f"Provisioned {biz} for {email} with key {new_key}")
+
+    return {"ok": True}
 
 @app.get("/health")
 def health():
