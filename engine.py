@@ -117,6 +117,16 @@ def analyze_review(
         "next_steps": next_steps
     }
 
+def db_ensure_business(business_id: str, email: str | None = None) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO businesses (business_id, email)
+                VALUES (%s, %s)
+                ON CONFLICT (business_id) DO UPDATE SET email = COALESCE(EXCLUDED.email, businesses.email)
+            """, (business_id, email))
+        conn.commit()
+
 def enforce_urgency_rules(ai_urgency: str, tags: list[str]) -> str:
     order = {"low": 0, "medium": 1, "high": 2}
 

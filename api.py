@@ -47,44 +47,41 @@ class ReviewRequest(BaseModel):
     order_number: str = ""
     run_id: str | None = None
 
+class CreateCheckoutRequest(BaseModel):
+    business_id: str
+    email: str
+
+@app.post("/billing/create-checkout")
+def create_checkout(req: CreateCheckoutRequest):
+    # Basic validation
+    business_id = req.business_id.strip().lower()
+    email = req.email.strip().lower()
+
+    if not business_id:
+        raise HTTPException(status_code=400, detail="business_id required")
+    if "@" not in email:
+        raise HTTPException(status_code=400, detail="valid email required")
+
+    price_id = os.getenv("STRIPE_PRICE_ID_MONTHLY")
+    if not price_id:
+        raise HTTPException(status_code=500, detail="STRIPE_PRICE_ID_MONTHLY not set")
+
+    # IMPORTANT: set success/cancel URLs to something you control later
+    success_url = "https://example.com/success"
+    cancel_url = "https://example.com/cancel"
+
+    session = stripe.checkout.Session.create(
+        mode="subscription",
+        customer_email=email,
+        line_items=[{"price": price_id, "quantity": 1}],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={"business_id": business_id},
+    )
+
+    return {"checkout_url": session.url}
+
 stripe.api_key = os.getenv("STRIPE_API_KEY")
-
-@app.post("/stripe/webhook")
-async def stripe_webhook(request: Request):
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature")
-    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
-
-    if not webhook_secret:
-        raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET not set")
-
-    try:
-        event = stripe.Webhook.construct_event(
-            payload=payload,
-            sig_header=sig_header,
-            secret=webhook_secret
-        )
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid Stripe signature")
-
-    # Trigger on subscription/payment success
-    if event["type"] in ["checkout.session.completed", "invoice.payment_succeeded"]:
-        data = event["data"]["object"]
-
-        # Pull customer email
-        email = data.get("customer_details", {}).get("email") or data.get("customer_email")
-
-        # For now: create a business_id from email prefix
-        # (Next: you’ll collect a real business name in checkout)
-        if email:
-            biz = email.split("@")[0].lower().replace(".", "_")
-            new_key = "cust_" + secrets.token_urlsafe(24)
-            db_add_customer_key(new_key, biz)
-
-            # No webhook yet; customer sets later
-            print(f"Provisioned {biz} for {email} with key {new_key}")
-
-    return {"ok": True}
 
 @app.get("/health")
 def health():
@@ -271,6 +268,78 @@ def admin_deactivate_customer_key(req: AdminDeactivateCustomerKeyRequest, x_api_
     key = req.api_key.strip()
     db_deactivate_customer_key(key)
     return {"status": "ok", "api_key": key}
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+    if not webhook_secret:
+        raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET not set")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload=payload,
+            sig_header=sig_header,
+            secret=webhook_secret
+        )
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Stripe signature")
+
+    # Trigger on subscription/payment success
+    if event["type"] in ["checkout.session.completed", "invoice.payment_succeeded"]:
+        data = event["data"]["object"]
+
+        # Pull customer email
+        email = data.get("customer_details", {}).get("email") or data.get("customer_email")
+
+        # For now: create a business_id from email prefix
+        # (Next: you’ll collect a real business name in checkout)
+        if email:
+            biz = email.split("@")[0].lower().replace(".", "_")
+            new_key = "cust_" + secrets.token_urlsafe(24)
+            db_add_customer_key(new_key, biz)
+
+            # No webhook yet; customer sets later
+            print(f"Provisioned {biz} for {email} with key {new_key}")
+
+        return {"ok": True}
+    
+    event_type = event["type"]
+
+    if event_type == "checkout.session.completed":
+        session = event["data"]["object"]
+
+        business_id = (session.get("metadata") or {}).get("business_id", "")
+        email = (session.get("customer_details") or {}).get("email") or session.get("customer_email")
+
+        if not business_id:
+            # still return 200 so Stripe doesn't retry forever
+            print("[stripe] Missing metadata.business_id, skipping provisioning")
+            return {"ok": True}
+
+        business_id = business_id.strip().lower()
+
+        # 1) Ensure business exists (you likely already have a businesses table by now)
+        db_ensure_business(business_id=business_id, email=email)
+
+        # 2) Create and store a new API key (active)
+        customer_key = "cust_" + secrets.token_urlsafe(24)
+        db_add_customer_key(business_id=business_id, api_key=customer_key)
+
+        # 3) Optional: notify you in Discord
+        admin_hook = os.getenv("ADMIN_DISCORD_WEBHOOK_URL")
+        if admin_hook:
+            msg = f"✅ **New Subscriber**\nBusiness: `{business_id}`\nEmail: `{email}`\nAPI Key: `{customer_key}`"
+            try:
+                requests.post(admin_hook, json={"content": msg}, timeout=15).raise_for_status()
+            except Exception as e:
+                print(f"[stripe] Failed to notify Discord: {e}")
+
+        print(f"[stripe] Provisioned business={business_id}")
+        return {"ok": True}
+
 
 def verify_api_key(x_api_key: str | None) -> None:
     if not x_api_key:
