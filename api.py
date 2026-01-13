@@ -20,7 +20,10 @@ from engine import (
     db_set_webhook,
     db_add_customer_key, 
     db_deactivate_customer_key, 
-    db_get_business_for_key
+    db_get_business_for_key,
+    db_stripe_event_seen,
+    db_mark_stripe_event,
+    db_ensure_business
 )
 from dotenv import load_dotenv
 load_dotenv()
@@ -286,6 +289,13 @@ async def stripe_webhook(request: Request):
         )
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid Stripe signature")
+
+    event_id = event["id"]
+
+    if db_stripe_event_seen(event_id):
+        return {"status": "already_processed"}
+
+    db_mark_stripe_event(event_id)
 
     # Trigger on subscription/payment success
     if event["type"] in ["checkout.session.completed", "invoice.payment_succeeded"]:

@@ -234,6 +234,13 @@ def db_init():
             """)
 
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS processed_stripe_events (
+                    event_id TEXT PRIMARY KEY,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS business_settings (
                     business_id TEXT PRIMARY KEY,
                     discord_webhook_url TEXT
@@ -374,3 +381,21 @@ def db_get_business_for_key(api_key: str) -> str | None:
             """, (api_key,))
             row = cur.fetchone()
     return row[0] if row else None
+
+def db_stripe_event_seen(event_id: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM processed_stripe_events WHERE event_id = %s LIMIT 1",
+                (event_id,),
+            )
+            return cur.fetchone() is not None
+
+def db_mark_stripe_event(event_id: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO processed_stripe_events (event_id) VALUES (%s) ON CONFLICT DO NOTHING",
+                (event_id,),
+            )
+        conn.commit()
