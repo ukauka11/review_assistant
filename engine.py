@@ -256,6 +256,18 @@ def db_init():
                 )
             """)
 
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    business_id TEXT PRIMARY KEY,
+                    stripe_customer_id TEXT,
+                    stripe_subscription_id TEXT,
+                    status TEXT NOT NULL,
+                    current_period_end TIMESTAMPTZ,
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+
+
         conn.commit()
 
 def db_insert_review(record: dict, business_id: str) -> None:
@@ -360,16 +372,6 @@ def db_add_customer_key(api_key: str, business_id: str) -> None:
             """, (api_key, business_id))
         conn.commit()
 
-def db_deactivate_customer_key(api_key: str) -> None:
-    with db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE customer_keys
-                SET is_active = FALSE
-                WHERE api_key = %s
-            """, (api_key,))
-        conn.commit()
-
 def db_get_business_for_key(api_key: str) -> str | None:
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -382,6 +384,28 @@ def db_get_business_for_key(api_key: str) -> str | None:
             row = cur.fetchone()
     return row[0] if row else None
 
+def db_deactivate_business_keys(business_id: str) -> int:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE customer_keys
+                SET is_active = FALSE
+                WHERE business_id = %s
+            """, (business_id,))
+            updated = cur.rowcount
+        conn.commit()
+    return updated
+
+def db_deactivate_customer_key(api_key: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE customer_keys
+                SET is_active = FALSE
+                WHERE api_key = %s
+            """, (api_key,))
+        conn.commit()
+        
 def db_stripe_event_seen(event_id: str) -> bool:
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -399,3 +423,42 @@ def db_mark_stripe_event(event_id: str) -> None:
                 (event_id,),
             )
         conn.commit()
+
+def db_set_subscription(
+    business_id: str,
+    status: str,
+    stripe_customer_id: str | None = None,
+    stripe_subscription_id: str | None = None,
+    current_period_end: str | None = None,
+):
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO subscriptions
+                (business_id, stripe_customer_id, stripe_subscription_id, status, current_period_end)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (business_id)
+                DO UPDATE SET
+                    stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, subscriptions.stripe_customer_id),
+                    stripe_subscription_id = COALESCE(EXCLUDED.stripe_subscription_id, subscriptions.stripe_subscription_id),
+                    status = EXCLUDED.status,
+                    current_period_end = EXCLUDED.current_period_end,
+                    updated_at = NOW()
+            """, (
+                business_id,
+                stripe_customer_id,
+                stripe_subscription_id,
+                status,
+                current_period_end,
+            ))
+        conn.commit()
+
+def db_get_subscription_status(business_id: str) -> str:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT status FROM subscriptions WHERE business_id = %s",
+                (business_id,),
+            )
+            row = cur.fetchone()
+            return row[0] if row else "inactive"

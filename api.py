@@ -88,8 +88,6 @@ def create_checkout(req: CreateCheckoutRequest):
 
     return {"checkout_url": session.url}
 
-stripe.api_key = os.getenv("STRIPE_API_KEY")
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -158,7 +156,6 @@ def summary(x_api_key: str | None = Header(default=None)):
     if business_from_key == "__admin__":
         raise HTTPException(status_code=400, detail="Use /summary_admin?business_id=... for admin")
 
-    records = db_fetch_reviews(business_id=business_from_key.strip().lower(), limit=500)
     business_id = business_from_key.strip().lower()
 
     status = db_get_subscription_status(business_id)
@@ -166,7 +163,6 @@ def summary(x_api_key: str | None = Header(default=None)):
         raise HTTPException(status_code=402, detail="Subscription inactive")
 
     records = db_fetch_reviews(business_id=business_id, limit=500)
-
     return summarize_reviews(records)
 
 @app.get("/summary_admin")
