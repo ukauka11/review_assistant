@@ -372,6 +372,28 @@ def db_add_customer_key(api_key: str, business_id: str) -> None:
             """, (api_key, business_id))
         conn.commit()
 
+def db_get_business_by_stripe(subscription_id: str | None, customer_id: str | None) -> str | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            if subscription_id:
+                cur.execute(
+                    "SELECT business_id FROM subscriptions WHERE stripe_subscription_id=%s LIMIT 1",
+                    (subscription_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    return row[0]
+
+            if customer_id:
+                cur.execute(
+                    "SELECT business_id FROM subscriptions WHERE stripe_customer_id=%s LIMIT 1",
+                    (customer_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    return row[0]
+    return None
+
 def db_get_business_for_key(api_key: str) -> str | None:
     with db_conn() as conn:
         with conn.cursor() as cur:

@@ -26,7 +26,8 @@ from engine import (
     db_ensure_business,
     db_get_subscription_status,
     db_set_subscription,
-    db_deactivate_business_keys
+    db_deactivate_business_keys,
+    db_get_business_by_stripe
 )
 from dotenv import load_dotenv
 load_dotenv()
@@ -317,6 +318,8 @@ async def stripe_webhook(request: Request):
 
         business_id = (session.get("metadata") or {}).get("business_id", "")
         email = (session.get("customer_details") or {}).get("email") or session.get("customer_email")
+        stripe_customer_id = session.get("customer")
+        stripe_subscription_id = session.get("subscription")
 
         if not business_id:
             # still return 200 so Stripe doesn't retry forever
@@ -325,24 +328,30 @@ async def stripe_webhook(request: Request):
 
         business_id = business_id.strip().lower()
 
-        # 1) Ensure business exists (you likely already have a businesses table by now)
+        # 1) Ensure business exists
         db_ensure_business(business_id=business_id, email=email)
 
+        # 2) Store mapping + set initial status (ONE TIME)
         db_set_subscription(
             business_id=business_id,
-            status="active",
-            stripe_customer_id=session.get("customer"),
-            stripe_subscription_id=session.get("subscription"),
+            status="active",  # or "trialing"
+            stripe_customer_id=stripe_customer_id,
+            stripe_subscription_id=stripe_subscription_id,
         )
 
-        # 2) Create and store a new API key (active)
+        # 3) Create and store a new API key (active)
         customer_key = "cust_" + secrets.token_urlsafe(24)
         db_add_customer_key(business_id=business_id, api_key=customer_key)
 
-        # 3) Optional: notify you in Discord
+        # 4) Optional: notify you in Discord
         admin_hook = os.getenv("ADMIN_DISCORD_WEBHOOK_URL")
         if admin_hook:
-            msg = f"✅ **New Subscriber**\nBusiness: `{business_id}`\nEmail: `{email}`\nAPI Key: `{customer_key}`"
+            msg = (
+                f"✅ **New Subscriber**\n"
+                f"Business: `{business_id}`\n"
+                f"Email: `{email}`\n"
+                f"API Key: `{customer_key}`"
+            )
             try:
                 requests.post(admin_hook, json={"content": msg}, timeout=15).raise_for_status()
             except Exception as e:
@@ -350,18 +359,18 @@ async def stripe_webhook(request: Request):
 
         print(f"[stripe] Provisioned business={business_id}")
         return {"ok": True}
-    
+
     elif event_type == "invoice.payment_succeeded":
         invoice = event["data"]["object"]
 
-        business_id = (invoice.get("metadata") or {}).get("business_id", "")
+        sub_id = invoice.get("subscription")
+        cus_id = invoice.get("customer")
+
+        business_id = db_get_business_by_stripe(sub_id, cus_id)
         if not business_id:
-            print("[stripe] Missing invoice metadata.business_id, skipping")
+            print("[stripe] Could not map invoice to business, skipping")
             return {"ok": True}
 
-        business_id = business_id.strip().lower()
-
-        # Mark subscription active (Step 4 DB status)
         db_set_subscription(business_id=business_id, status="active")
 
         print(f"[stripe] Payment succeeded for business={business_id}")
@@ -370,12 +379,13 @@ async def stripe_webhook(request: Request):
     elif event_type == "invoice.payment_failed":
         invoice = event["data"]["object"]
 
-        business_id = (invoice.get("metadata") or {}).get("business_id", "")
-        if not business_id:
-            print("[stripe] Missing invoice metadata.business_id, skipping")
-            return {"ok": True}
+        sub_id = invoice.get("subscription")
+        cus_id = invoice.get("customer")
 
-        business_id = business_id.strip().lower()
+        business_id = db_get_business_by_stripe(sub_id, cus_id)
+        if not business_id:
+            print("[stripe] Could not map invoice to business, skipping")
+            return {"ok": True}
 
         db_set_subscription(business_id=business_id, status="past_due")
 
@@ -385,12 +395,13 @@ async def stripe_webhook(request: Request):
     elif event_type == "customer.subscription.deleted":
         sub = event["data"]["object"]
 
-        business_id = (sub.get("metadata") or {}).get("business_id", "")
-        if not business_id:
-            print("[stripe] Missing subscription metadata.business_id, skipping")
-            return {"ok": True}
+        sub_id = sub.get("id")
+        cus_id = sub.get("customer")
 
-        business_id = business_id.strip().lower()
+        business_id = db_get_business_by_stripe(sub_id, cus_id)
+        if not business_id:
+            print("[stripe] Could not map subscription to business, skipping")
+            return {"ok": True}
 
         db_set_subscription(business_id=business_id, status="canceled")
         disabled = db_deactivate_business_keys(business_id)
