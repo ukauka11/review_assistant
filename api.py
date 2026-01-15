@@ -23,7 +23,10 @@ from engine import (
     db_get_business_for_key,
     db_stripe_event_seen,
     db_mark_stripe_event,
-    db_ensure_business
+    db_ensure_business,
+    db_get_subscription_status,
+    db_set_subscription,
+    db_deactivate_business_keys
 )
 from dotenv import load_dotenv
 load_dotenv()
@@ -80,6 +83,7 @@ def create_checkout(req: CreateCheckoutRequest):
         success_url=success_url,
         cancel_url=cancel_url,
         metadata={"business_id": business_id},
+        subscription_data={"metadata": {"business_id": business_id}},
     )
 
     return {"checkout_url": session.url}
@@ -99,6 +103,12 @@ def analyze(req: ReviewRequest, x_api_key: str | None = Header(default=None)):
     if business_from_key == "__admin__":
         raise HTTPException(status_code=400, detail="Use /analyze_admin for admin requests")
 
+    business_id = business_from_key.strip().lower()
+
+    status = db_get_subscription_status(business_id)
+    if status != "active":
+        raise HTTPException(status_code=402, detail="Subscription inactive")
+
     record = analyze_review(
         client=client,
         review_text=req.review_text,
@@ -108,7 +118,6 @@ def analyze(req: ReviewRequest, x_api_key: str | None = Header(default=None)):
         run_id=req.run_id,
     )
 
-    business_id = business_from_key.strip().lower()
     db_insert_review(record, business_id=business_id)
 
     return {"business_id": business_id, "record": record}
@@ -150,6 +159,14 @@ def summary(x_api_key: str | None = Header(default=None)):
         raise HTTPException(status_code=400, detail="Use /summary_admin?business_id=... for admin")
 
     records = db_fetch_reviews(business_id=business_from_key.strip().lower(), limit=500)
+    business_id = business_from_key.strip().lower()
+
+    status = db_get_subscription_status(business_id)
+    if status != "active":
+        raise HTTPException(status_code=402, detail="Subscription inactive")
+
+    records = db_fetch_reviews(business_id=business_id, limit=500)
+
     return summarize_reviews(records)
 
 @app.get("/summary_admin")
@@ -297,25 +314,6 @@ async def stripe_webhook(request: Request):
 
     db_mark_stripe_event(event_id)
 
-    # Trigger on subscription/payment success
-    if event["type"] in ["checkout.session.completed", "invoice.payment_succeeded"]:
-        data = event["data"]["object"]
-
-        # Pull customer email
-        email = data.get("customer_details", {}).get("email") or data.get("customer_email")
-
-        # For now: create a business_id from email prefix
-        # (Next: you’ll collect a real business name in checkout)
-        if email:
-            biz = email.split("@")[0].lower().replace(".", "_")
-            new_key = "cust_" + secrets.token_urlsafe(24)
-            db_add_customer_key(new_key, biz)
-
-            # No webhook yet; customer sets later
-            print(f"Provisioned {biz} for {email} with key {new_key}")
-
-        return {"ok": True}
-    
     event_type = event["type"]
 
     if event_type == "checkout.session.completed":
@@ -334,6 +332,13 @@ async def stripe_webhook(request: Request):
         # 1) Ensure business exists (you likely already have a businesses table by now)
         db_ensure_business(business_id=business_id, email=email)
 
+        db_set_subscription(
+            business_id=business_id,
+            status="active",
+            stripe_customer_id=session.get("customer"),
+            stripe_subscription_id=session.get("subscription"),
+        )
+
         # 2) Create and store a new API key (active)
         customer_key = "cust_" + secrets.token_urlsafe(24)
         db_add_customer_key(business_id=business_id, api_key=customer_key)
@@ -349,7 +354,57 @@ async def stripe_webhook(request: Request):
 
         print(f"[stripe] Provisioned business={business_id}")
         return {"ok": True}
+    
+    elif event_type == "invoice.payment_succeeded":
+        invoice = event["data"]["object"]
 
+        business_id = (invoice.get("metadata") or {}).get("business_id", "")
+        if not business_id:
+            print("[stripe] Missing invoice metadata.business_id, skipping")
+            return {"ok": True}
+
+        business_id = business_id.strip().lower()
+
+        # Mark subscription active (Step 4 DB status)
+        db_set_subscription(business_id=business_id, status="active")
+
+        print(f"[stripe] Payment succeeded for business={business_id}")
+        return {"ok": True}
+
+    elif event_type == "invoice.payment_failed":
+        invoice = event["data"]["object"]
+
+        business_id = (invoice.get("metadata") or {}).get("business_id", "")
+        if not business_id:
+            print("[stripe] Missing invoice metadata.business_id, skipping")
+            return {"ok": True}
+
+        business_id = business_id.strip().lower()
+
+        db_set_subscription(business_id=business_id, status="past_due")
+
+        print(f"[stripe] Payment failed for business={business_id}")
+        return {"ok": True}
+    
+    elif event_type == "customer.subscription.deleted":
+        sub = event["data"]["object"]
+
+        business_id = (sub.get("metadata") or {}).get("business_id", "")
+        if not business_id:
+            print("[stripe] Missing subscription metadata.business_id, skipping")
+            return {"ok": True}
+
+        business_id = business_id.strip().lower()
+
+        db_set_subscription(business_id=business_id, status="canceled")
+        disabled = db_deactivate_business_keys(business_id)
+
+        print(f"[stripe] Subscription canceled for business={business_id}")
+        print(f"[stripe] Disabled {disabled} API key(s) for business={business_id}")
+        return {"ok": True}
+
+    else:
+        return {"status": "ignored", "type": event_type}
 
 def verify_api_key(x_api_key: str | None) -> None:
     if not x_api_key:
