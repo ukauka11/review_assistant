@@ -27,7 +27,7 @@ from engine import (
     db_get_subscription_status,
     db_set_subscription,
     db_deactivate_business_keys,
-    db_get_business_by_stripe
+    db_get_business_by_stripe,
 )
 from dotenv import load_dotenv
 load_dotenv()
@@ -362,7 +362,6 @@ async def stripe_webhook(request: Request):
 
     elif event_type == "invoice.payment_succeeded":
         invoice = event["data"]["object"]
-
         sub_id = invoice.get("subscription")
         cus_id = invoice.get("customer")
 
@@ -378,7 +377,6 @@ async def stripe_webhook(request: Request):
 
     elif event_type == "invoice.payment_failed":
         invoice = event["data"]["object"]
-
         sub_id = invoice.get("subscription")
         cus_id = invoice.get("customer")
 
@@ -394,7 +392,6 @@ async def stripe_webhook(request: Request):
     
     elif event_type == "customer.subscription.deleted":
         sub = event["data"]["object"]
-
         sub_id = sub.get("id")
         cus_id = sub.get("customer")
 
