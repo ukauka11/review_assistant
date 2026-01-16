@@ -256,6 +256,7 @@ def db_init():
                 )
             """)
 
+            # Create subscriptions table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS subscriptions (
                     business_id TEXT PRIMARY KEY,
@@ -263,10 +264,24 @@ def db_init():
                     stripe_subscription_id TEXT,
                     status TEXT NOT NULL,
                     current_period_end TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
 
+            # Ensure unique Stripe customer → business mapping
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_stripe_customer_id_key
+                ON subscriptions(stripe_customer_id)
+                WHERE stripe_customer_id IS NOT NULL
+            """)
+
+            # Ensure unique Stripe subscription → business mapping
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_stripe_subscription_id_key
+                ON subscriptions(stripe_subscription_id)
+                WHERE stripe_subscription_id IS NOT NULL
+            """)
 
         conn.commit()
 
