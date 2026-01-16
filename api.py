@@ -365,7 +365,10 @@ async def stripe_webhook(request: Request):
         sub_id = invoice.get("subscription")
         cus_id = invoice.get("customer")
 
+        print(f"[stripe] invoice event: sub_id={sub_id} cus_id={cus_id}")
         business_id = db_get_business_by_stripe(sub_id, cus_id)
+        print(f"[stripe] mapped business_id={business_id}")
+
         if not business_id:
             print("[stripe] Could not map invoice to business, skipping")
             return {"ok": True}
