@@ -291,6 +291,7 @@ async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
     webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    print(f"[stripe] received type={event['type']} id={event['id']}")
 
     if not webhook_secret:
         raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET not set")
@@ -358,6 +359,7 @@ async def stripe_webhook(request: Request):
                 print(f"[stripe] Failed to notify Discord: {e}")
 
         print(f"[stripe] Provisioned business={business_id}")
+        print(f"[stripe] checkout.completed business_id={business_id} email={email} cus={session.get('customer')} sub={session.get('subscription')}")
         return {"ok": True}
 
     elif event_type == "invoice.payment_succeeded":
@@ -376,6 +378,7 @@ async def stripe_webhook(request: Request):
         db_set_subscription(business_id=business_id, status="active")
 
         print(f"[stripe] Payment succeeded for business={business_id}")
+        print(f"[stripe] invoice.succeeded metadata={invoice.get('metadata')} customer={invoice.get('customer')} subscription={invoice.get('subscription')}")
         return {"ok": True}
 
     elif event_type == "invoice.payment_failed":
@@ -391,6 +394,7 @@ async def stripe_webhook(request: Request):
         db_set_subscription(business_id=business_id, status="past_due")
 
         print(f"[stripe] Payment failed for business={business_id}")
+        print(f"[stripe] invoice.failed metadata={invoice.get('metadata')} customer={invoice.get('customer')} subscription={invoice.get('subscription')}")
         return {"ok": True}
     
     elif event_type == "customer.subscription.deleted":
@@ -408,6 +412,7 @@ async def stripe_webhook(request: Request):
 
         print(f"[stripe] Subscription canceled for business={business_id}")
         print(f"[stripe] Disabled {disabled} API key(s) for business={business_id}")
+        print(f"[stripe] sub.deleted metadata={sub.get('metadata')} customer={sub.get('customer')} sub_id={sub.get('id')}")
         return {"ok": True}
 
     else:
