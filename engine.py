@@ -269,6 +269,15 @@ def db_init():
                 )
             """)
 
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS businesses (
+                    business_id TEXT PRIMARY KEY,
+                    email TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+
             # Ensure unique Stripe customer → business mapping
             cur.execute("""
                 CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_stripe_customer_id_key
