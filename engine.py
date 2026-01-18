@@ -499,3 +499,18 @@ def db_get_subscription_status(business_id: str) -> str:
             )
             row = cur.fetchone()
             return row[0] if row else "inactive"
+
+def db_get_business_for_subscription(stripe_customer_id: str | None, stripe_subscription_id: str | None) -> str | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            if stripe_subscription_id:
+                cur.execute("SELECT business_id FROM subscriptions WHERE stripe_subscription_id=%s LIMIT 1", (stripe_subscription_id,))
+                row = cur.fetchone()
+                if row:
+                    return row[0]
+            if stripe_customer_id:
+                cur.execute("SELECT business_id FROM subscriptions WHERE stripe_customer_id=%s LIMIT 1", (stripe_customer_id,))
+                row = cur.fetchone()
+                if row:
+                    return row[0]
+    return None

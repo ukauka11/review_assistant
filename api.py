@@ -28,6 +28,7 @@ from engine import (
     db_set_subscription,
     db_deactivate_business_keys,
     db_get_business_by_stripe,
+    db_get_business_for_subscription
 )
 from dotenv import load_dotenv
 load_dotenv()
@@ -291,7 +292,6 @@ async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
     webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
-    print(f"[stripe] received type={event['type']} id={event['id']}")
 
     if not webhook_secret:
         raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET not set")
@@ -305,6 +305,7 @@ async def stripe_webhook(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid Stripe signature")
 
+    print(f"[stripe] received type={event['type']} id={event['id']}")
     event_id = event["id"]
 
     if db_stripe_event_seen(event_id):
