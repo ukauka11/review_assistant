@@ -28,7 +28,8 @@ from engine import (
     db_set_subscription,
     db_deactivate_business_keys,
     db_get_business_by_stripe,
-    db_get_business_for_subscription
+    db_get_business_for_subscription,
+    db_conn
 )
 from dotenv import load_dotenv
 load_dotenv()
@@ -464,3 +465,10 @@ def get_business_from_key(x_api_key: str | None) -> str:
         return biz
 
     raise HTTPException(status_code=401, detail="Unauthorized")
+
+@app.get("/debug/db")
+def debug_db():
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT current_database();")
+            return {"db": cur.fetchone()[0]}
