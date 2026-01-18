@@ -28,7 +28,6 @@ from engine import (
     db_set_subscription,
     db_deactivate_business_keys,
     db_get_business_by_stripe,
-    db_get_business_for_subscription,
     db_conn
 )
 from dotenv import load_dotenv
@@ -342,6 +341,13 @@ async def stripe_webhook(request: Request):
             stripe_subscription_id=stripe_subscription_id,
         )
 
+        print(
+            f"[stripe][checkout] wrote subscription "
+            f"biz={business_id} "
+            f"cus={stripe_customer_id} "
+            f"sub={stripe_subscription_id}"
+        )
+
         # 3) Create and store a new API key (active)
         customer_key = "cust_" + secrets.token_urlsafe(24)
         db_add_customer_key(business_id=business_id, api_key=customer_key)
@@ -379,6 +385,12 @@ async def stripe_webhook(request: Request):
 
         db_set_subscription(business_id=business_id, status="active")
 
+        print(
+            f"[stripe][invoice.succeeded] set ACTIVE "
+            f"biz={business_id} "
+            f"sub={sub_id} "
+            f"cus={cus_id}"
+        )
         print(f"[stripe] Payment succeeded for business={business_id}")
         print(f"[stripe] invoice.succeeded metadata={invoice.get('metadata')} customer={invoice.get('customer')} subscription={invoice.get('subscription')}")
         return {"ok": True}
@@ -395,6 +407,12 @@ async def stripe_webhook(request: Request):
 
         db_set_subscription(business_id=business_id, status="past_due")
 
+        print(
+            f"[stripe][invoice.failed] set PAST_DUE "
+            f"biz={business_id} "
+            f"sub={sub_id} "
+            f"cus={cus_id}"
+        )
         print(f"[stripe] Payment failed for business={business_id}")
         print(f"[stripe] invoice.failed metadata={invoice.get('metadata')} customer={invoice.get('customer')} subscription={invoice.get('subscription')}")
         return {"ok": True}
@@ -412,6 +430,13 @@ async def stripe_webhook(request: Request):
         db_set_subscription(business_id=business_id, status="canceled")
         disabled = db_deactivate_business_keys(business_id)
 
+        print(
+            f"[stripe][sub.deleted] CANCELED "
+            f"biz={business_id} "
+            f"keys_disabled={disabled} "
+            f"sub={sub_id} "
+            f"cus={cus_id}"
+        )
         print(f"[stripe] Subscription canceled for business={business_id}")
         print(f"[stripe] Disabled {disabled} API key(s) for business={business_id}")
         print(f"[stripe] sub.deleted metadata={sub.get('metadata')} customer={sub.get('customer')} sub_id={sub.get('id')}")
