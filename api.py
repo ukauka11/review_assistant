@@ -90,6 +90,104 @@ def create_checkout(req: CreateCheckoutRequest):
 
     return {"checkout_url": session.url}
 
+@app.post("/billing/portal")
+def billing_portal(x_api_key: str | None = Header(default=None)):
+    verify_api_key(x_api_key)
+    rate_limit(x_api_key)
+
+    business_id = get_business_from_key(x_api_key)
+    if business_id == "__admin__":
+        raise HTTPException(status_code=400, detail="Admin cannot open billing portal without a business context")
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT stripe_customer_id FROM subscriptions WHERE business_id=%s LIMIT 1",
+                (business_id,),
+            )
+            row = cur.fetchone()
+
+    if not row or not row[0]:
+        raise HTTPException(status_code=400, detail="No Stripe customer found for this business")
+
+    stripe_customer_id = row[0]
+
+    # Set this to your real dashboard URL later
+    return_url = os.getenv("APP_RETURN_URL", "https://restaurantassist.app/dashboard")
+
+    session = stripe.billing_portal.Session.create(
+        customer=stripe_customer_id,
+        return_url=return_url,
+    )
+    return {"url": session.url}
+
+@app.get("/me")
+def me(x_api_key: str | None = Header(default=None)):
+    verify_api_key(x_api_key)
+    rate_limit(x_api_key)
+
+    business_id = get_business_from_key(x_api_key)
+    if business_id == "__admin__":
+        raise HTTPException(status_code=400, detail="Admin key not allowed for /me")
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT b.business_id, b.email,
+                       s.status, s.current_period_end
+                FROM businesses b
+                LEFT JOIN subscriptions s ON s.business_id = b.business_id
+                WHERE b.business_id = %s
+                LIMIT 1
+            """, (business_id,))
+            row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    biz_id, email, status, current_period_end = row
+
+    return {
+        "business_id": biz_id,
+        "email": email,
+        "subscription": {
+            "status": status or "inactive",
+            "current_period_end": current_period_end.isoformat() if current_period_end else None,
+        }
+    }
+
+@app.post("/keys/rotate")
+def rotate_key(x_api_key: str | None = Header(default=None)):
+    verify_api_key(x_api_key)
+    rate_limit(x_api_key)
+
+    business_id = get_business_from_key(x_api_key)
+    if business_id == "__admin__":
+        raise HTTPException(status_code=400, detail="Admin key cannot rotate customer keys")
+
+    old_key = x_api_key.strip()
+    new_key = "cust_" + secrets.token_urlsafe(24)
+
+    # Create new key + deactivate old key atomically-ish in one transaction
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO customer_keys (api_key, business_id, is_active)
+                VALUES (%s, %s, TRUE)
+                ON CONFLICT (api_key)
+                DO UPDATE SET business_id = EXCLUDED.business_id, is_active = TRUE
+            """, (new_key, business_id))
+
+            cur.execute("""
+                UPDATE customer_keys
+                SET is_active = FALSE
+                WHERE api_key = %s
+            """, (old_key,))
+
+        conn.commit()
+
+    return {"api_key": new_key}
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -302,7 +400,9 @@ async def stripe_webhook(request: Request):
             sig_header=sig_header,
             secret=webhook_secret
         )
-    except Exception:
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid Stripe signature")
 
     print(f"[stripe] received type={event['type']} id={event['id']}")
@@ -350,7 +450,7 @@ async def stripe_webhook(request: Request):
 
         # 3) Create and store a new API key (active)
         customer_key = "cust_" + secrets.token_urlsafe(24)
-        db_add_customer_key(business_id=business_id, api_key=customer_key)
+        db_add_customer_key(api_key=customer_key, business_id=business_id)
 
         # 4) Optional: notify you in Discord
         admin_hook = os.getenv("ADMIN_DISCORD_WEBHOOK_URL")
