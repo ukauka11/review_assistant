@@ -1,5 +1,4 @@
 import os
-import json
 import time
 import requests
 import secrets
@@ -7,19 +6,16 @@ import stripe
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from pydantic import BaseModel
-from engine import (
+from ai import get_client, analyze_review, normalize_platform, summarize_reviews
+from db import (
     db_list_businesses,
-    get_client,
-    analyze_review,
-    normalize_platform,
     db_insert_review,
     db_fetch_reviews,
-    summarize_reviews,
     db_init,
     db_get_webhook,
     db_set_webhook,
-    db_add_customer_key, 
-    db_deactivate_customer_key, 
+    db_add_customer_key,
+    db_deactivate_customer_key,
     db_get_business_for_key,
     db_stripe_event_seen,
     db_mark_stripe_event,
@@ -28,8 +24,9 @@ from engine import (
     db_set_subscription,
     db_deactivate_business_keys,
     db_get_business_by_stripe,
-    db_conn
+    db_conn,
 )
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -40,9 +37,11 @@ stripe.api_key = os.getenv("STRIPE_API_KEY")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db_init()  # runs once when app starts
+    if os.getenv("DATABASE_URL"):
+        db_init()
+    else:
+        print("⚠️ DATABASE_URL not set — skipping db_init()")
     yield
-    # (nothing needed on shutdown yet)
 
 app = FastAPI(title="Restaurant Review Assistant API", lifespan=lifespan)
 
@@ -134,7 +133,7 @@ def me(x_api_key: str | None = Header(default=None)):
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT b.business_id, b.email,
-                       s.status, s.current_period_end
+                    s.status, s.plan, s.current_period_end
                 FROM businesses b
                 LEFT JOIN subscriptions s ON s.business_id = b.business_id
                 WHERE b.business_id = %s
@@ -145,13 +144,14 @@ def me(x_api_key: str | None = Header(default=None)):
     if not row:
         raise HTTPException(status_code=404, detail="Business not found")
 
-    biz_id, email, status, current_period_end = row
+    biz_id, email, status, plan, current_period_end = row
 
     return {
         "business_id": biz_id,
         "email": email,
         "subscription": {
             "status": status or "inactive",
+            "plan": plan or "starter",
             "current_period_end": current_period_end.isoformat() if current_period_end else None,
         }
     }
@@ -292,12 +292,14 @@ def daily_summary_job(x_api_key: str | None = Header(default=None)):
             records = db_fetch_reviews(business_id=biz, limit=200)
             summary = summarize_reviews(records)
 
+            sent = summary.get("sentiment_breakdown", {})
+
             text = (
                 f"**Daily Summary — {biz}**\n"
                 f"Total: {summary.get('total_reviews', 0)} | "
-                f"Positive: {summary.get('positive', 0)} | "
-                f"Neutral: {summary.get('neutral', 0)} | "
-                f"Negative: {summary.get('negative', 0)}\n"
+                f"Positive: {sent.get('positive', 0)} | "
+                f"Neutral: {sent.get('neutral', 0)} | "
+                f"Negative: {sent.get('negative', 0)}\n"
                 f"Top issues: {summary.get('top_issues', [])}\n"
             )
 
@@ -439,6 +441,7 @@ async def stripe_webhook(request: Request):
             status="active",  # or "trialing"
             stripe_customer_id=stripe_customer_id,
             stripe_subscription_id=stripe_subscription_id,
+            plan="starter",
         )
 
         print(
