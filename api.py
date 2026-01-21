@@ -26,6 +26,7 @@ from db import (
     db_deactivate_business_keys,
     db_get_business_by_stripe,
     db_conn,
+    db_get_subscription_info,
 )
 
 from dotenv import load_dotenv
@@ -85,8 +86,9 @@ def create_checkout(req: CreateCheckoutRequest):
         raise HTTPException(status_code=500, detail="STRIPE_PRICE_ID_MONTHLY not set")
 
     frontend = os.getenv("FRONTEND_URL", "https://restaurantassist.app").rstrip("/")
-    success_url = f"{frontend}/success.html"
+    success_url = f"{frontend}/success.html?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{frontend}/cancel.html"
+
 
     session = stripe.checkout.Session.create(
         mode="subscription",
@@ -558,6 +560,32 @@ async def stripe_webhook(request: Request):
 
     else:
         return {"status": "ignored", "type": event_type}
+
+@app.get("/billing/status")
+def billing_status(session_id: str = Query(...)):
+    # 1) Retrieve session from Stripe
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+
+    # 2) Extract Stripe IDs
+    stripe_customer_id = session.get("customer")
+    stripe_subscription_id = session.get("subscription")
+
+    # 3) Map to business_id using your existing mapping function
+    business_id = db_get_business_by_stripe(stripe_subscription_id, stripe_customer_id)
+    if not business_id:
+        # Sometimes webhook is still processing; tell frontend to retry
+        return {"ready": False, "message": "Provisioning in progress. Please refresh in a few seconds."}
+
+    # 4) Return subscription info from DB
+    info = db_get_subscription_info(business_id)
+    return {
+        "ready": True,
+        "business_id": business_id,
+        "subscription": info,
+    }
 
 def verify_api_key(x_api_key: str | None) -> None:
     if not x_api_key:

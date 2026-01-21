@@ -327,7 +327,6 @@ def db_set_subscription(
             ))
         conn.commit()
 
-
 def db_get_subscription_status(business_id: str) -> str:
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -337,3 +336,24 @@ def db_get_subscription_status(business_id: str) -> str:
             )
             row = cur.fetchone()
             return row[0] if row else "inactive"
+
+def db_get_subscription_info(business_id: str) -> dict:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT status, plan, current_period_end
+                FROM subscriptions
+                WHERE business_id = %s
+                LIMIT 1
+            """, (business_id,))
+            row = cur.fetchone()
+
+    if not row:
+        return {"status": "inactive", "plan": "starter", "current_period_end": None}
+
+    status, plan, period_end = row
+    return {
+        "status": status,
+        "plan": plan or "starter",
+        "current_period_end": period_end.isoformat() if period_end else None,
+    }
