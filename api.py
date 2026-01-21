@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from emailer import send_email
 from ai import get_client, analyze_review, normalize_platform, summarize_reviews
 from db import (
     db_list_businesses,
@@ -467,6 +468,35 @@ async def stripe_webhook(request: Request):
         # 3) Create and store a new API key (active)
         customer_key = "cust_" + secrets.token_urlsafe(24)
         db_add_customer_key(api_key=customer_key, business_id=business_id)
+
+        frontend = os.getenv("FRONTEND_URL", "https://restaurantassist.app").rstrip("/")
+        dashboard_url = f"{frontend}/dashboard.html"
+
+        html = f"""
+        <h2>Welcome to RestaurantAssist</h2>
+        <p>Your subscription is active.</p>
+
+        <p><b>Your API Key (save this):</b></p>
+        <pre style="padding:12px;background:#111;color:#0f0;border-radius:6px;">{customer_key}</pre>
+
+        <p><b>Dashboard:</b> <a href="{dashboard_url}">{dashboard_url}</a></p>
+
+        <p><b>API Base URL:</b><br/>
+        <code>https://review-assistant-api.onrender.com</code></p>
+
+        <p><b>Next step:</b> Open the dashboard, paste your API key, and you can start using /analyze.</p>
+
+        <p style="color:#777;font-size:12px;">
+        Security note: This key grants access to your account. If you ever need a new one, contact support.
+        </p>
+        """
+
+        # Don't break provisioning if email fails
+        try:
+            if email:
+                send_email(email, "Your RestaurantAssist API Key", html)
+        except Exception as e:
+            print(f"⚠️ Email send failed: {e}")
 
         # 4) Optional: notify you in Discord
         admin_hook = os.getenv("ADMIN_DISCORD_WEBHOOK_URL")
