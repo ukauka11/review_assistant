@@ -490,11 +490,22 @@ async def stripe_webhook(request: Request):
         Security note: This key grants access to your account. If you ever need a new one, contact support.
         </p>
         """
+        html += """
+        <hr style="margin-top:24px; opacity:0.3;" />
+
+        <p style="font-size:12px; opacity:0.8;">
+        You’re receiving this email because you signed up at
+        <a href="https://restaurantassist.app">restaurantassist.app</a>.
+        <br><br>
+        Need help? Just reply to this email or contact
+        <a href="mailto:support@restaurantassist.app">support@restaurantassist.app</a>.
+        </p>
+        """
 
         # Don't break provisioning if email fails
         try:
             if email:
-                send_email(email, "Your RestaurantAssist API Key", html)
+                send_email(email, "Your RestaurantAssist API Key (Action Required)", html)
         except Exception as e:
             print(f"⚠️ Email send failed: {e}")
 
