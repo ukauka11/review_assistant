@@ -301,21 +301,28 @@ def db_set_subscription(
     stripe_customer_id: str | None = None,
     stripe_subscription_id: str | None = None,
     current_period_end: str | None = None,
-    plan: str | None = None,
+    plan: str = "starter",
 ):
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO subscriptions
-                (business_id, stripe_customer_id, stripe_subscription_id, status, current_period_end)
-                VALUES (%s, %s, %s, %s, %s)
+                (
+                    business_id,
+                    stripe_customer_id,
+                    stripe_subscription_id,
+                    status,
+                    current_period_end,
+                    plan
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (business_id)
                 DO UPDATE SET
                     stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, subscriptions.stripe_customer_id),
                     stripe_subscription_id = COALESCE(EXCLUDED.stripe_subscription_id, subscriptions.stripe_subscription_id),
                     status = EXCLUDED.status,
                     current_period_end = EXCLUDED.current_period_end,
-                    plan = COALESCE(EXCLUDED.plan, subscriptions.plan),
+                    plan = EXCLUDED.plan,
                     updated_at = NOW()
             """, (
                 business_id,
