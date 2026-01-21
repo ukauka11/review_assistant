@@ -84,9 +84,9 @@ def create_checkout(req: CreateCheckoutRequest):
     if not price_id:
         raise HTTPException(status_code=500, detail="STRIPE_PRICE_ID_MONTHLY not set")
 
-    # IMPORTANT: set success/cancel URLs to something you control later
-    success_url = "https://example.com/success"
-    cancel_url = "https://example.com/cancel"
+    frontend = os.getenv("FRONTEND_URL", "https://restaurantassist.app").rstrip("/")
+    success_url = f"{frontend}/success.html"
+    cancel_url = f"{frontend}/cancel.html"
 
     session = stripe.checkout.Session.create(
         mode="subscription",
