@@ -5,6 +5,7 @@ import secrets
 import stripe
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from ai import get_client, analyze_review, normalize_platform, summarize_reviews
 from db import (
@@ -44,6 +45,16 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="Restaurant Review Assistant API", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://restaurantassist.app",
+        "https://www.restaurantassist.app",
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 client = get_client()
 
