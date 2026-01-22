@@ -617,8 +617,15 @@ def billing_status(session_id: str = Query(...)):
     stripe_customer_id = session.get("customer")
     stripe_subscription_id = session.get("subscription")
 
+    if not stripe_customer_id and not stripe_subscription_id:
+        return {
+            "ready": False,
+            "message": "Checkout found, but subscription is still being created. Please refresh in a few seconds."
+        }
+    
     # 3) Map to business_id using your existing mapping function
     business_id = db_get_business_by_stripe(stripe_subscription_id, stripe_customer_id)
+
     if not business_id:
         # Sometimes webhook is still processing; tell frontend to retry
         return {"ready": False, "message": "Provisioning in progress. Please refresh in a few seconds."}
