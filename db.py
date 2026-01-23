@@ -12,7 +12,6 @@ def db_conn():
         raise RuntimeError("DATABASE_URL not set")
     return connect(url)
 
-
 def db_init():
     with db_conn() as conn:
         with conn.cursor() as cur:

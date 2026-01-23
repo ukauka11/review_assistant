@@ -73,26 +73,33 @@ class ReviewRequest(BaseModel):
 class CreateCheckoutRequest(BaseModel):
     business_id: str
     email: str
+    plan: str = "starter"
 
 @app.post("/billing/create-checkout")
 def create_checkout(req: CreateCheckoutRequest):
-    # Basic validation
     business_id = req.business_id.strip().lower()
     email = req.email.strip().lower()
+    plan = (req.plan or "starter").strip().lower()
 
     if not business_id:
         raise HTTPException(status_code=400, detail="business_id required")
     if "@" not in email:
         raise HTTPException(status_code=400, detail="valid email required")
+    if plan not in ("starter", "pro"):
+        raise HTTPException(status_code=400, detail="plan must be starter or pro")
 
-    price_id = os.getenv("STRIPE_PRICE_ID_MONTHLY")
+    # Choose Stripe Price ID based on plan
+    if plan == "starter":
+        price_id = os.getenv("STRIPE_PRICE_ID_STARTER")
+    else:
+        price_id = os.getenv("STRIPE_PRICE_ID_PRO")
+
     if not price_id:
-        raise HTTPException(status_code=500, detail="STRIPE_PRICE_ID_MONTHLY not set")
+        raise HTTPException(status_code=500, detail=f"Stripe price id not set for plan={plan}")
 
     frontend = os.getenv("FRONTEND_URL", "https://restaurantassist.app").rstrip("/")
     success_url = f"{frontend}/success.html?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{frontend}/cancel.html"
-
 
     session = stripe.checkout.Session.create(
         mode="subscription",
@@ -100,8 +107,8 @@ def create_checkout(req: CreateCheckoutRequest):
         line_items=[{"price": price_id, "quantity": 1}],
         success_url=success_url,
         cancel_url=cancel_url,
-        metadata={"business_id": business_id},
-        subscription_data={"metadata": {"business_id": business_id}},
+        metadata={"business_id": business_id, "plan": plan},
+        subscription_data={"metadata": {"business_id": business_id, "plan": plan}},
     )
 
     return {"checkout_url": session.url}
