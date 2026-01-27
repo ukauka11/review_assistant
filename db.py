@@ -1,7 +1,7 @@
 import os
 import json
 from psycopg import connect
-
+from datetime import date
 
 print("✅ db.py loaded")
 
@@ -93,6 +93,52 @@ def db_init():
 
         conn.commit()
 
+PLAN_LIMITS = {
+    "starter": {"analyze_per_day": 30},
+    "pro": {"analyze_per_day": 200},
+}
+
+def db_get_plan_for_business(conn, business_id: str) -> str:
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT COALESCE(s.plan, 'starter')
+            FROM subscriptions s
+            WHERE s.business_id = %s
+            LIMIT 1
+        """, (business_id,))
+        row = cur.fetchone()
+    return (row[0] if row else "starter") or "starter"
+
+def db_get_usage_today(conn, business_id: str) -> int:
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT analyze_count
+            FROM usage_daily
+            WHERE business_id=%s AND day=CURRENT_DATE
+        """, (business_id,))
+        row = cur.fetchone()
+    return int(row[0]) if row else 0
+
+def db_inc_usage_today(conn, business_id: str, inc: int = 1) -> int:
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO usage_daily (business_id, day, analyze_count)
+            VALUES (%s, CURRENT_DATE, %s)
+            ON CONFLICT (business_id, day)
+            DO UPDATE SET analyze_count = usage_daily.analyze_count + EXCLUDED.analyze_count
+            RETURNING analyze_count
+        """, (business_id, inc))
+        new_count = cur.fetchone()[0]
+    conn.commit()
+    return int(new_count)
+
+def enforce_plan_limit(conn, business_id: str):
+    plan = db_get_plan_for_business(conn, business_id)
+    limit = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"])["analyze_per_day"]
+    used = db_get_usage_today(conn, business_id)
+    if used >= limit:
+        raise HTTPException(status_code=429, detail=f"Daily limit reached ({used}/{limit}) for plan={plan}")
+    return plan, used, limit
 
 def db_ensure_business(business_id: str, email: str | None = None) -> None:
     with db_conn() as conn:

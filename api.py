@@ -33,10 +33,26 @@ from db import (
 from dotenv import load_dotenv
 load_dotenv()
 
+def get_stripe_config():
+    mode = os.getenv("STRIPE_MODE", "test").lower().strip()
+    if mode == "live":
+        secret = os.getenv("STRIPE_SECRET_KEY_LIVE")
+        starter = os.getenv("STRIPE_PRICE_STARTER_LIVE")
+        pro = os.getenv("STRIPE_PRICE_PRO_LIVE")
+    else:
+        secret = os.getenv("STRIPE_SECRET_KEY_TEST")
+        starter = os.getenv("STRIPE_PRICE_STARTER_TEST")
+        pro = os.getenv("STRIPE_PRICE_PRO_TEST")
+
+    if not secret:
+        raise RuntimeError("Missing Stripe secret key for current STRIPE_MODE")
+    if not starter or not pro:
+        raise RuntimeError("Missing Stripe price IDs for current STRIPE_MODE")
+
+    return mode, secret, starter, pro
+
 RATE_LIMIT_PER_MIN = 30  # adjust later
 _hits = {}  # dict: api_key -> list[timestamps]
-
-stripe.api_key = os.getenv("STRIPE_API_KEY")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -89,13 +105,10 @@ def create_checkout(req: CreateCheckoutRequest):
         raise HTTPException(status_code=400, detail="plan must be starter or pro")
 
     # Choose Stripe Price ID based on plan
-    if plan == "starter":
-        price_id = os.getenv("STRIPE_PRICE_ID_STARTER")
-    else:
-        price_id = os.getenv("STRIPE_PRICE_ID_PRO")
+    mode, secret, starter_price, pro_price = get_stripe_config()
+    stripe.api_key = secret
 
-    if not price_id:
-        raise HTTPException(status_code=500, detail=f"Stripe price id not set for plan={plan}")
+    price_id = starter_price if plan == "starter" else pro_price
 
     frontend = os.getenv("FRONTEND_URL", "https://restaurantassist.app").rstrip("/")
     success_url = f"{frontend}/success.html?session_id={{CHECKOUT_SESSION_ID}}"
@@ -107,6 +120,7 @@ def create_checkout(req: CreateCheckoutRequest):
         line_items=[{"price": price_id, "quantity": 1}],
         success_url=success_url,
         cancel_url=cancel_url,
+        client_reference_=business_id,
         metadata={"business_id": business_id, "plan": plan},
         subscription_data={"metadata": {"business_id": business_id, "plan": plan}},
     )
