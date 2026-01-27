@@ -124,7 +124,7 @@ def create_checkout(req: CreateCheckoutRequest):
         line_items=[{"price": price_id, "quantity": 1}],
         success_url=success_url,
         cancel_url=cancel_url,
-        client_reference_=business_id,
+        client_reference_id=business_id,
         metadata={"business_id": business_id, "plan": plan},
         subscription_data={"metadata": {"business_id": business_id, "plan": plan}},
     )
