@@ -282,6 +282,8 @@ def analyze(req: ReviewRequest, x_api_key: str | None = Header(default=None)):
         print("❌ [analyze] Full record:", record)
         raise HTTPException(status_code=500, detail="AI returned empty reply")
 
+    print(f"[analyze] biz={business_id} sentiment={record.get('sentiment')} urgency={record.get('urgency')} category={record.get('category')} reply_len={len((record.get('reply') or '').strip())}")
+
     db_insert_review(record, business_id=business_id)
 
     return {"business_id": business_id, "record": record}
