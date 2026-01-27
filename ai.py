@@ -66,13 +66,15 @@ def sanitize_ai(ai_result: dict):
     if category not in ALLOWED_CATEGORY:
         category = "other"
 
-    reply = ai_result.get("reply", "").strip()
+    reply = (ai_result.get("reply") or ai_result.get("response") or ai_result.get("message") or "").strip()
+    if not reply:
+        reply = "Thanks for the feedback — we really appreciate it. We’re looking into this and would love to make it right. Please contact us so we can follow up."
+
     next_steps = ai_result.get("next_steps", [])
     if not isinstance(next_steps, list):
         next_steps = [str(next_steps)]
 
     return sentiment, urgency, category, reply, next_steps
-
 
 def analyze_review(
     client: OpenAI,
@@ -88,11 +90,37 @@ def analyze_review(
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": "Respond in JSON only."},
-            {"role": "user", "content": review_text},
+            {
+                "role": "system",
+                "content": (
+                "You are RestaurantAssist. Output ONLY valid JSON (no markdown, no extra text). "
+                "Return this exact schema:\n"
+                "{\n"
+                '  "sentiment": "positive|neutral|negative",\n'
+                '  "urgency": "low|medium|high",\n'
+                '  "category": "food|service|speed|cleanliness|pricing|other",\n'
+                '  "reply": "string - a professional restaurant owner reply",\n'
+                '  "next_steps": ["string", "string"]\n'
+                "}\n"
+                "Rules:\n"
+                "- reply must NEVER be empty.\n"
+                "- next_steps must be an array (can be empty).\n"
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                f"Platform: {platform}\n"
+                f"Customer name: {customer_name}\n"
+                f"Order number: {order_number}\n"
+                "Review:\n"
+                f"{review_text}"
+                )
+            },
         ],
         response_format={"type": "json_object"},
     )
+    print("🧪 raw model JSON:", repr(response.choices[0].message.content))
 
     ai_result = json.loads(response.choices[0].message.content)
     sentiment, urgency, category, reply, next_steps = sanitize_ai(ai_result)
