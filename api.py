@@ -133,7 +133,7 @@ def create_checkout(req: CreateCheckoutRequest):
         success_url=success_url,
         cancel_url=cancel_url,
         client_reference_id=business_id,
-        metadata={"business_id": business_id, "plan": plan},
+        plan = (session.get("metadata") or {}).get("plan", "starter").strip().lower(),
         subscription_data={"metadata": {"business_id": business_id, "plan": plan}},
     )
 
@@ -265,6 +265,22 @@ def analyze(req: ReviewRequest, x_api_key: str | None = Header(default=None)):
         order_number=req.order_number,
         run_id=req.run_id,
     )
+
+        # --- HARD GUARD: record must include a non-empty reply ---
+    if not isinstance(record, dict):
+        print("❌ [analyze] analyze_review returned non-dict:", type(record), record)
+        raise HTTPException(status_code=500, detail="Internal error (bad analyze result)")
+
+    reply = (record.get("reply") or record.get("response") or "").strip()
+
+    # If your engine uses "response" sometimes, normalize it to "reply"
+    if "reply" not in record and "response" in record:
+        record["reply"] = record.get("response")
+
+    if not reply:
+        print("❌ [analyze] Empty/missing reply returned. Record keys:", list(record.keys()))
+        print("❌ [analyze] Full record:", record)
+        raise HTTPException(status_code=500, detail="AI returned empty reply")
 
     db_insert_review(record, business_id=business_id)
 
@@ -441,6 +457,11 @@ def admin_deactivate_customer_key(req: AdminDeactivateCustomerKeyRequest, x_api_
 async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
+
+    if not sig_header:
+        print("⚠️ Missing stripe-signature header")
+        raise HTTPException(status_code=400, detail="Missing Stripe signature header")
+
     webhook_secret = get_webhook_secret()
 
     if not webhook_secret:
@@ -452,13 +473,15 @@ async def stripe_webhook(request: Request):
             sig_header=sig_header,
             secret=webhook_secret
         )
-    except Exception as e:
-        print("⚠️ Stripe webhook error:", str(e))
-        raise HTTPException(status_code=400, detail="Invalid webhook")
-    except ValueError:
+    except ValueError as e:
+        print("⚠️ Stripe webhook payload error:", str(e))
         raise HTTPException(status_code=400, detail="Invalid payload")
-    except stripe.error.SignatureVerificationError:
+    except stripe.error.SignatureVerificationError as e:
+        print("⚠️ Stripe webhook signature error:", str(e))
         raise HTTPException(status_code=400, detail="Invalid Stripe signature")
+    except Exception as e:
+        print("⚠️ Stripe webhook unknown error:", str(e))
+        raise HTTPException(status_code=400, detail="Invalid webhook")
 
     print(f"[stripe] received type={event['type']} id={event['id']}")
     event_id = event["id"]
@@ -494,7 +517,7 @@ async def stripe_webhook(request: Request):
             status="active",  # or "trialing"
             stripe_customer_id=stripe_customer_id,
             stripe_subscription_id=stripe_subscription_id,
-            plan="starter",
+            plan = (session.get("metadata") or {}).get("plan", "starter").strip().lower(),
         )
 
         print(
