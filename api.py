@@ -51,6 +51,14 @@ def get_stripe_config():
 
     return mode, secret, starter, pro
 
+def get_webhook_secret():
+    mode = os.getenv("STRIPE_MODE", "test").lower().strip()
+
+    if mode == "live":
+        return os.getenv("STRIPE_WEBHOOK_SECRET_LIVE")
+
+    return os.getenv("STRIPE_WEBHOOK_SECRET_TEST")
+
 RATE_LIMIT_PER_MIN = 30  # adjust later
 _hits = {}  # dict: api_key -> list[timestamps]
 
@@ -433,10 +441,10 @@ def admin_deactivate_customer_key(req: AdminDeactivateCustomerKeyRequest, x_api_
 async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
-    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    webhook_secret = get_webhook_secret()
 
     if not webhook_secret:
-        raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET not set")
+        raise HTTPException(status_code=500, detail="Webhook secret not configured")
 
     try:
         event = stripe.Webhook.construct_event(
@@ -444,6 +452,9 @@ async def stripe_webhook(request: Request):
             sig_header=sig_header,
             secret=webhook_secret
         )
+    except Exception as e:
+        print("⚠️ Stripe webhook error:", str(e))
+        raise HTTPException(status_code=400, detail="Invalid webhook")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid payload")
     except stripe.error.SignatureVerificationError:
